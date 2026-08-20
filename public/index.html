@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>CRAM ROYALE — bet your GPA</title>
+  <meta name="description" content="A cyberpunk casino mock-exam for the DDW 10.020 final. Answer, wager, climb the leaderboard." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8E%B0%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <div class="scanlines" aria-hidden="true"></div>
+  <div class="grid-floor" aria-hidden="true"></div>
+
+  <!-- persistent HUD -->
+  <header id="hud" class="hidden">
+    <div class="hud-left">
+      <span class="hud-logo">🎰 CRAM<span class="accent">ROYALE</span></span>
+    </div>
+    <div class="hud-right">
+      <span id="hud-chips" class="hud-chips">🪙 0</span>
+      <button id="btn-leaderboard-hud" class="hud-btn" title="Leaderboard">🏆</button>
+      <button id="btn-home" class="hud-btn" title="Lobby">🏠</button>
+      <button id="btn-music" class="hud-btn" title="Music">🎵</button>
+      <button id="btn-sfx" class="hud-btn" title="Sound effects">🔊</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- ── LOGIN ─────────────────────────────────────────────── -->
+    <section id="screen-login" class="screen active">
+      <div class="login-wrap">
+        <h1 class="title glitch" data-text="CRAM ROYALE">CRAM ROYALE</h1>
+        <p class="subtitle">DATA-DRIVEN WAGERS · <span class="accent">bet your GPA</span></p>
+        <p class="tagline">The DDW 10.020 final, reimagined as a neon casino. Answer questions, wager chips, climb the board. The house — and the exam — always wins. Probably.</p>
+
+        <form id="login-form" class="login-form" autocomplete="off">
+          <label class="field-label">PICK YOUR DEGENERATE ALIAS</label>
+          <input id="handle-input" class="neon-input big" maxlength="24" placeholder="e.g. sigmoid_sniper" required />
+          <input id="emoji-input" type="hidden" value="🎰" />
+          <div class="emoji-row">
+            <button type="button" class="emoji-pick sel">🎰</button>
+            <button type="button" class="emoji-pick">🦈</button>
+            <button type="button" class="emoji-pick">🤖</button>
+            <button type="button" class="emoji-pick">💀</button>
+            <button type="button" class="emoji-pick">👾</button>
+            <button type="button" class="emoji-pick">🐉</button>
+            <button type="button" class="emoji-pick">🧠</button>
+            <button type="button" class="emoji-pick">🔥</button>
+          </div>
+          <button type="submit" class="btn btn-primary big">ENTER THE FLOOR ▶</button>
+        </form>
+        <button id="btn-view-lb-login" class="btn-ghost">view leaderboard</button>
+        <p class="disclaimer">chips are imaginary · your exam is not · study anyway</p>
+      </div>
+    </section>
+
+    <!-- ── MODES ─────────────────────────────────────────────── -->
+    <section id="screen-modes" class="screen">
+      <p id="modes-greeting" class="greeting"></p>
+      <h2 class="section-title">CHOOSE YOUR TABLE</h2>
+      <div class="modes-grid">
+        <button class="mode-card" data-mode="mock">
+          <span class="mode-icon">📝</span>
+          <span class="mode-name">Mock Exam</span>
+          <span class="mode-blurb">The 21 real mock-final questions. The genuine article.</span>
+          <span class="mode-tag">21 Qs · 51 pts</span>
+        </button>
+        <button class="mode-card" data-mode="predicted">
+          <span class="mode-icon">🔮</span>
+          <span class="mode-name">Predicted Paper</span>
+          <span class="mode-blurb">Similar questions they might ask. Fresh drills across every topic.</span>
+          <span class="mode-tag">50 Qs · predicted</span>
+        </button>
+        <button class="mode-card" data-mode="all">
+          <span class="mode-icon">🎲</span>
+          <span class="mode-name">Full Degen Run</span>
+          <span class="mode-blurb">Everything, shuffled. Maximum chaos, maximum chips.</span>
+          <span class="mode-tag">71 Qs · chaos</span>
+        </button>
+        <button class="mode-card" data-mode="blitz">
+          <span class="mode-icon">⚡</span>
+          <span class="mode-name">Concept Blitz</span>
+          <span class="mode-blurb">Multi-select only. Fast money, brutal −50% penalties.</span>
+          <span class="mode-tag">multi-select</span>
+        </button>
+      </div>
+      <div class="modes-actions">
+        <button id="btn-modes-lb" class="btn-ghost">🏆 leaderboard</button>
+        <button id="btn-achievements" class="btn-ghost">🏅 achievements</button>
+      </div>
+    </section>
+
+    <!-- ── EXAM ──────────────────────────────────────────────── -->
+    <section id="screen-exam" class="screen">
+      <div class="exam-progress"><div id="exam-progressbar"></div></div>
+      <div class="exam-shell">
+        <div class="q-head">
+          <span id="q-progress" class="q-progress">Q1 / 21</span>
+          <span id="q-part" class="q-part">PART 1</span>
+          <span id="q-topic" class="q-topic">Topic</span>
+          <span id="q-points" class="q-points">3 pts</span>
+          <span id="q-source" class="q-source">★ REAL MOCK</span>
+        </div>
+
+        <div id="q-body" class="q-body"></div>
+
+        <!-- gambling panel -->
+        <div id="wager-panel" class="wager-panel">
+          <div class="odds-row">
+            <div class="odds-box">
+              <span class="odds-label">🎰 EXAM ODDS</span>
+              <span id="odds-value" class="odds-value">0%</span>
+              <div class="odds-bar"><div id="odds-fill" class="odds-fill"></div></div>
+              <span id="odds-quip" class="odds-quip"></span>
+            </div>
+            <div class="mult-box">
+              <span class="odds-label">PAYOUT</span>
+              <span id="mult-value" class="mult-value">2.0×</span>
+              <span class="mult-sub">on a perfect answer</span>
+            </div>
+          </div>
+
+          <div class="wager-controls">
+            <div class="wager-readout">
+              <span>WAGER <b id="wager-amount">50</b> 🪙</span>
+              <span class="wager-outcome">win <b id="wager-win" class="up">+0</b> · lose <b id="wager-lose" class="down">-0</b></span>
+            </div>
+            <input id="wager-slider" type="range" min="0" max="1000" value="50" class="wager-slider" />
+            <div class="wager-quicks">
+              <button class="wager-quick" data-amt="0">0</button>
+              <button class="wager-quick" data-amt="10">10</button>
+              <button class="wager-quick" data-amt="50">50</button>
+              <button class="wager-quick" data-amt="100">100</button>
+              <button class="wager-quick" data-amt="max">ALL-IN</button>
+            </div>
+          </div>
+
+          <div class="exam-btns">
+            <button id="btn-buy" class="btn btn-buy">🕳️ Buy a hint (🪙 <span id="buy-cost">150</span>)</button>
+            <button id="btn-lockin" class="btn btn-primary">LOCK IN &amp; SPIN 🎲</button>
+          </div>
+        </div>
+
+        <!-- result panel -->
+        <div id="result-panel" class="result-panel hidden"></div>
+      </div>
+    </section>
+
+    <!-- ── RESULTS ───────────────────────────────────────────── -->
+    <section id="screen-results" class="screen">
+      <div class="results-wrap">
+        <div id="res-grade" class="res-grade">S</div>
+        <h2 class="section-title">CASHED OUT</h2>
+        <p id="res-msg" class="res-msg"></p>
+        <div class="res-grid">
+          <div class="res-cell"><span class="res-k">SCORE</span><span id="res-score" class="res-v">0 / 51</span></div>
+          <div class="res-cell"><span class="res-k">PERCENT</span><span id="res-pct" class="res-v">0%</span></div>
+          <div class="res-cell"><span class="res-k">CORRECT</span><span id="res-correct" class="res-v">0 / 21</span></div>
+          <div class="res-cell"><span class="res-k">ACCURACY</span><span id="res-acc" class="res-v">0%</span></div>
+        </div>
+        <div class="res-chips-wrap">
+          <span class="res-k">CHIPS THIS RUN</span>
+          <span id="res-chips" class="res-big up">+0</span>
+          <span id="res-balance" class="res-balance">🪙 0</span>
+        </div>
+        <p id="res-rank" class="res-rank"></p>
+        <div class="results-actions">
+          <button id="btn-again" class="btn btn-primary">RUN IT BACK ▶</button>
+          <button id="btn-res-lb" class="btn-ghost">🏆 leaderboard</button>
+          <button id="btn-share" class="btn-ghost">📋 share</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── LEADERBOARD ───────────────────────────────────────── -->
+    <section id="screen-leaderboard" class="screen">
+      <div class="lb-wrap">
+        <h2 class="section-title">🏆 THE BOARD</h2>
+        <div class="lb-tabs">
+          <button class="lb-tab active" data-board="score">TOP SCORE</button>
+          <button class="lb-tab" data-board="chips">💰 HIGH ROLLERS</button>
+        </div>
+        <div id="lb-body" class="lb-body"></div>
+        <button id="lb-close" class="btn btn-primary">◀ BACK</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- loader overlay -->
+  <div id="loader" class="loader">
+    <div class="loader-spinner">🎰</div>
+    <div id="loader-text" class="loader-text">shuffling…</div>
+  </div>
+
+  <!-- achievements modal -->
+  <div id="achv-modal" class="modal">
+    <div class="modal-card">
+      <h3>🏅 ACHIEVEMENTS</h3>
+      <div id="achv-grid" class="achv-grid"></div>
+      <button id="achv-close" class="btn btn-primary">CLOSE</button>
+    </div>
+  </div>
+
+  <!-- loan shark modal -->
+  <div id="shark-modal" class="modal">
+    <div class="modal-card shark">
+      <div class="shark-face">🦈</div>
+      <h3>BUSTED.</h3>
+      <p>You're out of chips, friend. The house noticed. I can spot you <b>250 chips</b>… no strings. (There are strings. There are always strings.)</p>
+      <div class="shark-btns">
+        <button id="shark-yes" class="btn btn-primary">Take the deal 🤝</button>
+        <button id="shark-no" class="btn-ghost">Walk away broke</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>

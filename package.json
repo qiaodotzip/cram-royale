@@ -1,0 +1,20 @@
+{
+  "name": "cram-royale",
+  "version": "1.0.0",
+  "description": "CRAM ROYALE — a cyberpunk casino mock-exam for DDW 10.020 finals. Bet your GPA.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "seed": "node db/seed.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "pg": "^8.13.1"
+  },
+  "license": "MIT"
+}
