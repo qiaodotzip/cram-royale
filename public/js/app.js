@@ -375,9 +375,8 @@ async function loadBoard() {
       const me = state.player && r.handle === state.player.handle ? ' me' : '';
       const top = i === 0 ? ' top' : '';
       const rank = String(i + 1).padStart(2, '0');
-      const acc = Number(r.answered) ? Math.round((Number(r.correct) / Number(r.answered)) * 100) : 0;
       const badge = r.title ? `<span class="title-badge">${escapeHtml(r.title)}</span>` : '';
-      return `<div class="board-row${top}${me}"><span class="board-rank">${rank}</span><span class="board-name">${badge}${escapeHtml(r.handle)}</span><span class="board-val"><b>${fmt(r.answered)}</b> answered <span class="board-sub2">· ${acc}% acc</span></span></div>`;
+      return `<div class="board-row${top}${me}"><span class="board-rank">${rank}</span><span class="board-name">${badge}${escapeHtml(r.handle)}</span><span class="board-val"><b>${fmt(r.answered)}</b> answered</span></div>`;
     }).join('');
   } catch (e) { body.innerHTML = `<div class="board-empty">board offline: ${e.message}</div>`; }
 }
