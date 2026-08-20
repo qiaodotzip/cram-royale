@@ -58,6 +58,7 @@ function setPlayer(p) {
   localStorage.setItem('cram_name', p.handle);
   $('#name-input').value = p.handle;
   setCurrency(p.currency || 0);
+  refreshClaimable(); // light up the vault dot if there's currency waiting
 }
 function setCurrency(n) {
   if (state.player) state.player.currency = Number(n);
@@ -101,7 +102,7 @@ function wireHome() {
     b.addEventListener('click', () => onMenu(b.dataset.action));
   });
   $('#name-form').addEventListener('submit', (e) => { e.preventDefault(); onMenu('grind'); });
-  $('#home-chip').addEventListener('click', async () => { Audio.click(); if (await ensurePlayer()) openShop(); });
+  $('#home-chip').addEventListener('click', async () => { Audio.click(); if (await ensurePlayer()) openVault(); });
   $('#home-sfx').addEventListener('click', () => { Audio.init(); syncSfx(Audio.toggleSfx()); });
 }
 async function onMenu(action) {
@@ -333,6 +334,7 @@ function applyResult(q, res, gambled) {
       $('#play-progressbar').style.width = `${((res.answered % 25) / 25) * 100}%`;
     }
     if (res.currency != null) setCurrency(res.currency);
+    if (res.claimable != null) setClaimDot(res.claimable);
     // own events → immediate banner (poll skips our own to avoid doubles)
     if (res.gambleWin) { burst(150); Audio.milestone(); enqueueBanner(`<span class="glyph">◈</span> YOU GAMBLED &amp; WON <span class="big">+${fmt(res.gamblePayout)}</span> <span class="a-tag">${state.currentQ.odds?.headline || ''} SHOT</span>`); }
     if (res.milestone) { burst(120); Audio.milestone(); enqueueBanner(`<span class="glyph">▚</span> YOU HIT <span class="big">${res.milestone}</span> QUESTIONS <span class="a-tag">KEEP GRINDING</span>`); }
@@ -381,10 +383,21 @@ async function loadBoard() {
   } catch (e) { body.innerHTML = `<div class="board-empty">board offline: ${e.message}</div>`; }
 }
 
-// ── titles shop ──────────────────────────────────────────────────────────────
-async function openShop() {
+// ── the vault (achievements + titles) ────────────────────────────────────────
+async function openVault(tab = 'ach') {
   $('#shop-overlay').classList.add('open');
-  const grid = $('#shop-grid'); grid.innerHTML = '<div class="board-loading">loading titles…</div>';
+  switchVaultTab(tab);
+  await Promise.all([loadAchievements(), loadTitles()]);
+}
+function closeVault() { $('#shop-overlay').classList.remove('open'); }
+function switchVaultTab(tab) {
+  $$('.vault-tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+  $('#vault-ach').classList.toggle('hidden', tab !== 'ach');
+  $('#vault-titles').classList.toggle('hidden', tab !== 'titles');
+}
+
+async function loadTitles() {
+  const grid = $('#shop-grid'); if (!grid.children.length) grid.innerHTML = '<div class="board-loading">loading titles…</div>';
   try {
     const data = await API.titles(state.player.handle);
     setCurrency(data.balance); $('#shop-balance').textContent = fmt(data.balance);
@@ -399,18 +412,56 @@ async function openShop() {
     grid.querySelectorAll('[data-equip]').forEach((b) => b.addEventListener('click', () => equipTitle(b.dataset.equip)));
   } catch (e) { grid.innerHTML = `<div class="board-empty">shop offline: ${e.message}</div>`; }
 }
-function closeShop() { $('#shop-overlay').classList.remove('open'); }
 async function buyTitle(id) {
   Audio.click();
   const r = await API.buyTitle(state.player.handle, id).catch((e) => ({ ok: false, reason: e.message }));
-  if (r.ok) { setCurrency(r.currency); burst(60); Audio.correct(); banner('✓ title acquired'); openShop(); }
-  else if (r.reason === 'broke') { banner('✕ not enough ◈ — go win some gambles'); Audio.wrong(); }
+  if (r.ok) { setCurrency(r.currency); burst(60); Audio.correct(); banner('✓ title acquired'); loadTitles(); loadAchievements(); }
+  else if (r.reason === 'broke') { banner('✕ not enough ◈ — win gambles or claim achievements'); Audio.wrong(); }
   else banner('✕ ' + (r.reason || 'nope'));
 }
 async function equipTitle(id) {
   Audio.click();
   const p = await API.equipTitle(state.player.handle, id).catch(() => null);
-  if (p) { state.player.title = p.title; banner(p.title ? '✓ title equipped' : '✓ title removed'); openShop(); }
+  if (p) { state.player.title = p.title; banner(p.title ? '✓ title equipped' : '✓ title removed'); loadTitles(); }
+}
+
+async function loadAchievements() {
+  const grid = $('#ach-grid'); if (!grid.children.length) grid.innerHTML = '<div class="board-loading">loading…</div>';
+  try {
+    const data = await API.achievements(state.player.handle);
+    setCurrency(data.balance); $('#shop-balance').textContent = fmt(data.balance);
+    setClaimDot(data.claimable);
+    grid.innerHTML = data.list.map((a) => {
+      const pct = Math.min(100, Math.round((a.current / a.target) * 100));
+      const cls = a.claimed ? 'done' : (a.unlocked ? 'claimable' : '');
+      const btn = a.claimed ? `<button class="ach-btn claimed" disabled>✓ CLAIMED</button>`
+        : a.unlocked ? `<button class="ach-btn" data-claim="${a.id}">CLAIM ◈${a.reward}</button>`
+        : `<button class="ach-btn locked" disabled>◈${a.reward}</button>`;
+      return `<div class="ach-item ${cls}">
+        <div class="ach-top"><span class="ach-name">${a.name}</span></div>
+        <span class="ach-blurb">${a.blurb}</span>
+        <div class="ach-bar"><span style="width:${pct}%"></span></div>
+        <div class="ach-foot"><span class="ach-prog">${fmt(a.current)} / ${fmt(a.target)}</span>${btn}</div>
+      </div>`;
+    }).join('');
+    grid.querySelectorAll('[data-claim]').forEach((b) => b.addEventListener('click', () => claimAch(b.dataset.claim)));
+  } catch (e) { grid.innerHTML = `<div class="board-empty">offline: ${e.message}</div>`; }
+}
+async function claimAch(id) {
+  const r = await API.claimAchievement(state.player.handle, id).catch((e) => ({ ok: false, reason: e.message }));
+  if (r.ok) { setCurrency(r.currency); burst(100); Audio.milestone(); banner(`✓ claimed +◈${fmt(r.reward)}`); loadAchievements(); loadTitles(); }
+  else banner('✕ ' + (r.reason || 'nope'));
+}
+
+function setClaimDot(n) {
+  const has = Number(n) > 0;
+  $('#home-chip').classList.toggle('has-claim', has);
+  $('#play-chip').classList.toggle('has-claim', has);
+  const dot = $('#ach-tab-dot'); if (dot) dot.classList.toggle('hidden', !has);
+}
+async function refreshClaimable() {
+  if (!state.player) return;
+  try { setClaimDot((await API.achievements(state.player.handle)).claimable); } catch {}
 }
 
 // ── live feed + announcements (big banner) ───────────────────────────────────
@@ -470,9 +521,10 @@ function showNextBanner() {
 // ── overlays / static wiring ─────────────────────────────────────────────────
 function wireOverlays() {
   $('#board-close').addEventListener('click', () => { Audio.click(); closeBoard(); });
-  $('#shop-close').addEventListener('click', () => { Audio.click(); closeShop(); });
+  $('#shop-close').addEventListener('click', () => { Audio.click(); closeVault(); });
   $('#board-overlay').addEventListener('click', (e) => { if (e.target.id === 'board-overlay') closeBoard(); });
-  $('#shop-overlay').addEventListener('click', (e) => { if (e.target.id === 'shop-overlay') closeShop(); });
+  $('#shop-overlay').addEventListener('click', (e) => { if (e.target.id === 'shop-overlay') closeVault(); });
+  $$('.vault-tab').forEach((b) => b.addEventListener('click', () => { Audio.click(); switchVaultTab(b.dataset.tab); }));
   $('#popup-continue').addEventListener('click', () => { Audio.click(); $('#login-popup').classList.remove('open'); popupResolve && popupResolve(true); });
   $('#popup-cancel').addEventListener('click', () => { Audio.click(); $('#login-popup').classList.remove('open'); popupResolve && popupResolve(false); });
 }
@@ -485,7 +537,7 @@ function wirePlay() {
   $('#btn-confirm').addEventListener('click', confirmAnswer);
   $('#btn-gamble').addEventListener('click', gambleAnswer);
   $('#btn-board').addEventListener('click', () => { Audio.click(); openBoard(); });
-  $('#play-chip').addEventListener('click', () => { Audio.click(); openShop(); });
+  $('#play-chip').addEventListener('click', () => { Audio.click(); openVault(); });
   $('#btn-exit').addEventListener('click', () => { Audio.click(); show('home'); refreshLive(); }); // no "run" — leave freely
   $('#btn-sfx').addEventListener('click', () => { Audio.init(); syncSfx(Audio.toggleSfx()); });
 }

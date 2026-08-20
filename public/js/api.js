@@ -21,4 +21,6 @@ export const API = {
   titles: (handle) => jget(`/api/titles?handle=${encodeURIComponent(handle)}`),
   buyTitle: (handle, id) => jpost('/api/titles/buy', { handle, id }),
   equipTitle: (handle, id) => jpost('/api/titles/equip', { handle, id }),
+  achievements: (handle) => jget(`/api/achievements?handle=${encodeURIComponent(handle)}`),
+  claimAchievement: (handle, id) => jpost('/api/achievements/claim', { handle, id }),
 };

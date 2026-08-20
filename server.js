@@ -5,14 +5,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  initSchema, loginOrCreate, getPlayer, bumpAnswered, addCurrency, touchPlayer,
-  buyTitle, equipTitle, getQuestionsRaw, getFullQuestion, getMeta, topGrinders, liveStats,
-  addAnnouncement, getAnnouncements, pool,
+  initSchema, loginOrCreate, getPlayer, bumpAnswered, addCurrency, touchPlayer, bumpGamblesWon,
+  buyTitle, equipTitle, claimAchievement, getQuestionsRaw, getFullQuestion, getMeta,
+  topGrinders, liveStats, addAnnouncement, getAnnouncements, pool,
 } from './db/db.js';
 import { seedQuestions, questionCount } from './db/seed.js';
 import { gradeAnswer, isMilestone } from './db/grader.js';
 import { computeOdds } from './db/odds.js';
 import { TITLES, titleName } from './db/titles.js';
+import { evalAchievements, claimableCount } from './db/achievements.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -59,7 +60,7 @@ app.post('/api/check', async (req, res) => {
     if (!q) return res.status(404).json({ error: 'unknown question' });
 
     const verdict = gradeAnswer(q, response);
-    let answered = null, milestone = null, currency = null, gambleWin = false, gamblePayout = 0;
+    let answered = null, milestone = null, currency = null, gambleWin = false, gamblePayout = 0, claimable = null;
 
     if (handle && mode === 'grind') {
       const row = await bumpAnswered(handle, verdict.correct);
@@ -73,15 +74,18 @@ app.post('/api/check', async (req, res) => {
         const odds = computeOdds(q);
         gamblePayout = odds.gamblePayout;
         currency = await addCurrency(handle, gamblePayout);
+        await bumpGamblesWon(handle);
         await addAnnouncement(handle, activeTitle, 'gamble', null, odds.headline);
         gambleWin = true;
       }
+      // how many achievements are now claimable (drives the vault "!" dot)
+      claimable = claimableCount(await getPlayer(handle));
     } else if (handle) { await touchPlayer(handle); }
 
     res.json({
       correct: verdict.correct, fraction: verdict.fraction, pointsAwarded: verdict.pointsAwarded,
       correctAnswer: verdict.correctAnswer, explanation: verdict.explanation,
-      answered, milestone, gambled, gambleWin, gamblePayout, currency,
+      answered, milestone, gambled, gambleWin, gamblePayout, currency, claimable,
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -130,6 +134,22 @@ app.post('/api/titles/equip', async (req, res) => {
     const handle = clean(req.body?.handle); const id = req.body?.id ? clean(req.body.id, 20) : null;
     if (!handle) return res.status(400).json({ error: 'name required' });
     res.json(await equipTitle(handle, id));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── achievements ─────────────────────────────────────────────────────────────
+app.get('/api/achievements', async (req, res) => {
+  try {
+    const p = await getPlayer(clean(req.query.handle));
+    if (!p) return res.json({ list: evalAchievements({ answered: 0, correct: 0, gambles_won: 0, titles: [], claimed: [] }), balance: 0, claimable: 0 });
+    res.json({ list: evalAchievements(p), balance: p.currency, claimable: claimableCount(p) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post('/api/achievements/claim', async (req, res) => {
+  try {
+    const handle = clean(req.body?.handle); const id = clean(req.body?.id, 20);
+    if (!handle) return res.status(400).json({ error: 'name required' });
+    res.json(await claimAchievement(handle, id));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

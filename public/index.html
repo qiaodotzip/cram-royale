@@ -31,7 +31,7 @@
         <span class="corner-icon">◤</span>
         <div class="head-right">
           <button id="home-sfx" class="chip" title="Sound effects">◧ SFX</button>
-          <button id="home-chip" class="chip" title="Titles shop">◈ <span id="home-currency">0</span></button>
+          <button id="home-chip" class="chip" title="The Vault — achievements &amp; titles">◈ <span id="home-currency">0</span></button>
           <span class="tag-topright">[ DDW·10.020 ]</span>
         </div>
       </div>
@@ -84,7 +84,7 @@
         <span id="play-mode" class="play-mode">GRIND</span>
         <span id="play-counter" class="play-counter">ANSWERED · 0</span>
         <span class="play-spacer"></span>
-        <button id="play-chip" class="chip" title="Titles shop">◈ <span id="play-currency">0</span></button>
+        <button id="play-chip" class="chip" title="The Vault — achievements &amp; titles">◈ <span id="play-currency">0</span></button>
         <button id="btn-board" class="mini-btn" title="Leaderboard">▤ BOARD</button>
         <button id="btn-sfx" class="mini-btn" title="Sound">◧ SFX</button>
       </div>
@@ -192,12 +192,22 @@
     </div>
   </div>
 
-  <!-- ── TITLES SHOP OVERLAY ─────────────────────────────────── -->
+  <!-- ── VAULT OVERLAY (achievements + titles) ───────────────── -->
   <div id="shop-overlay" class="overlay">
     <div class="overlay-card shop-card">
-      <div class="overlay-head"><span class="slash">//</span><h3>TITLES</h3><span class="overlay-tag">◈ <span id="shop-balance">0</span></span><button id="shop-close" class="x-btn">✕</button></div>
-      <p class="board-sub">win gambles to earn <span class="red">◈ currency</span>. spend it on a title that rides next to your name.</p>
-      <div id="shop-grid" class="shop-grid"></div>
+      <div class="overlay-head"><span class="slash">//</span><h3>THE VAULT</h3><span class="overlay-tag">◈ <span id="shop-balance">0</span></span><button id="shop-close" class="x-btn">✕</button></div>
+      <div class="vault-tabs">
+        <button class="vault-tab active" data-tab="ach">ACHIEVEMENTS<span id="ach-tab-dot" class="tab-dot hidden"></span></button>
+        <button class="vault-tab" data-tab="titles">TITLES</button>
+      </div>
+      <div id="vault-ach" class="vault-pane">
+        <p class="board-sub">hit milestones, <span class="red">claim ◈ currency</span>, then buy titles. free money — go get it.</p>
+        <div id="ach-grid" class="ach-grid"></div>
+      </div>
+      <div id="vault-titles" class="vault-pane hidden">
+        <p class="board-sub">spend <span class="red">◈ currency</span> on a title that rides next to your name.</p>
+        <div id="shop-grid" class="shop-grid"></div>
+      </div>
     </div>
   </div>
 

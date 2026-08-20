@@ -2,6 +2,7 @@
 // is attached; locally we point at the Docker container (see .env.example).
 import pg from 'pg';
 import { TITLE_MAP } from './titles.js';
+import { ACH_MAP } from './achievements.js';
 
 const { Pool } = pg;
 
@@ -21,16 +22,21 @@ export const query = (text, params) => pool.query(text, params);
 export async function initSchema() {
   await query(`
     CREATE TABLE IF NOT EXISTS players (
-      id         SERIAL PRIMARY KEY,
-      handle     TEXT UNIQUE NOT NULL,
-      answered   BIGINT DEFAULT 0,
-      correct    BIGINT DEFAULT 0,
-      currency   BIGINT DEFAULT 0,
-      title      TEXT,
-      titles     TEXT[] DEFAULT '{}',
-      created_at TIMESTAMPTZ DEFAULT now(),
-      last_seen  TIMESTAMPTZ DEFAULT now()
+      id          SERIAL PRIMARY KEY,
+      handle      TEXT UNIQUE NOT NULL,
+      answered    BIGINT DEFAULT 0,
+      correct     BIGINT DEFAULT 0,
+      currency    BIGINT DEFAULT 0,
+      gambles_won BIGINT DEFAULT 0,
+      title       TEXT,
+      titles      TEXT[] DEFAULT '{}',
+      claimed     TEXT[] DEFAULT '{}',
+      created_at  TIMESTAMPTZ DEFAULT now(),
+      last_seen   TIMESTAMPTZ DEFAULT now()
     );
+    -- safe migrations for DBs created before these columns existed
+    ALTER TABLE players ADD COLUMN IF NOT EXISTS gambles_won BIGINT DEFAULT 0;
+    ALTER TABLE players ADD COLUMN IF NOT EXISTS claimed TEXT[] DEFAULT '{}';
 
     CREATE TABLE IF NOT EXISTS questions (
       id TEXT PRIMARY KEY, source TEXT NOT NULL, part INT, seq INT, topic TEXT,
@@ -55,7 +61,8 @@ export async function initSchema() {
 
 const shape = (r) => r && ({
   handle: r.handle, answered: Number(r.answered), correct: Number(r.correct),
-  currency: Number(r.currency), title: r.title, titles: r.titles || [],
+  currency: Number(r.currency), gambles_won: Number(r.gambles_won || 0),
+  title: r.title, titles: r.titles || [], claimed: r.claimed || [],
 });
 
 // ── players ──────────────────────────────────────────────────────────────────
@@ -95,6 +102,22 @@ export async function addCurrency(handle, delta) {
   return rows[0] ? Number(rows[0].currency) : null;
 }
 export async function touchPlayer(handle) { await query(`UPDATE players SET last_seen = now() WHERE handle = $1`, [handle]); }
+export async function bumpGamblesWon(handle) { await query(`UPDATE players SET gambles_won = gambles_won + 1 WHERE handle = $1`, [handle]); }
+
+// ── achievements ─────────────────────────────────────────────────────────────
+export async function claimAchievement(handle, id) {
+  const a = ACH_MAP[id];
+  if (!a) throw new Error('unknown achievement');
+  const p = await getPlayer(handle);
+  if (!p) throw new Error('unknown player');
+  if (p.claimed.includes(id)) return { ok: false, reason: 'claimed', ...p };
+  const current = a.metric === 'titles' ? p.titles.length : Number(p[a.metric] || 0);
+  if (current < a.target) return { ok: false, reason: 'locked', ...p };
+  const { rows } = await query(
+    `UPDATE players SET currency = currency + $2, claimed = array_append(claimed, $3)
+     WHERE handle = $1 RETURNING *`, [handle, a.reward, id]);
+  return { ok: true, reward: a.reward, ...shape(rows[0]) };
+}
 
 // ── titles ───────────────────────────────────────────────────────────────────
 export async function buyTitle(handle, id) {
