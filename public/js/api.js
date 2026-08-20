@@ -16,6 +16,7 @@ export const API = {
   check: (payload) => jpost('/api/check', payload),                    // {questionId,response,handle,mode,gambled}
   leaderboard: () => jget('/api/leaderboard'),
   live: () => jget('/api/live'),
+  meta: () => jget('/api/meta'),
   announcements: (since = 0) => jget(`/api/announcements?since=${since}`),
   titles: (handle) => jget(`/api/titles?handle=${encodeURIComponent(handle)}`),
   buyTitle: (handle, id) => jpost('/api/titles/buy', { handle, id }),

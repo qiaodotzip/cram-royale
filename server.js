@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   initSchema, loginOrCreate, getPlayer, bumpAnswered, addCurrency, touchPlayer,
-  buyTitle, equipTitle, getQuestionsRaw, getFullQuestion, topGrinders, liveStats,
+  buyTitle, equipTitle, getQuestionsRaw, getFullQuestion, getMeta, topGrinders, liveStats,
   addAnnouncement, getAnnouncements, pool,
 } from './db/db.js';
 import { seedQuestions, questionCount } from './db/seed.js';
@@ -96,6 +96,11 @@ app.get('/api/leaderboard', async (_req, res) => {
 
 app.get('/api/live', async (_req, res) => {
   try { res.json(await liveStats()); } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// available weeks + question types (for the options screen)
+app.get('/api/meta', async (_req, res) => {
+  try { res.json(await getMeta()); } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get('/api/announcements', async (req, res) => {

@@ -8,19 +8,36 @@ const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const fmt = (n) => Number(n).toLocaleString('en-US');
 
+const TYPE_LABELS = {
+  mcq: 'MCQ', multiselect: 'MULTI-SELECT', dropdowns: 'DROPDOWN',
+  numeric: 'NUMERIC', matching: 'MATCHING', ordering: 'ORDERING', text: 'TEXT',
+};
+
+function loadOptions() {
+  try { return { weeks: null, types: null, order: 'random', ...JSON.parse(localStorage.getItem('cram_opts') || '{}') }; }
+  catch { return { weeks: null, types: null, order: 'random' }; }
+}
+
 const state = {
   player: null, mode: 'grind',
-  pool: [], queue: [], mockList: [], mockIdx: 0,
+  pool: [], queue: [], orderMode: 'random', mockList: [], mockIdx: 0,
   current: null, currentQ: null, answered: false, mock: null,
   lastAnnId: null, annQueue: [], bannerBusy: false, boardTimer: null,
+  options: loadOptions(), allQuestions: null, meta: null,
 };
+function saveOptions() { localStorage.setItem('cram_opts', JSON.stringify(state.options)); }
 
 document.addEventListener('DOMContentLoaded', init);
 
 function init() {
-  addEventListener('pointerdown', () => Audio.init(), { once: true });
-  wireHome(); wirePlay(); wireOverlays(); wireStatic();
+  // start the audio engine on the first real interaction (pointer OR keyboard)
+  const kick = () => { Audio.init(); };
+  addEventListener('pointerdown', kick, { once: true });
+  addEventListener('keydown', kick, { once: true });
+
+  wireHome(); wirePlay(); wireOverlays(); wireStatic(); wireOptions();
   onKonami(() => { document.body.classList.toggle('crt'); glitch(500); });
+  syncSfx(Audio.isSfxOn);
 
   const saved = localStorage.getItem('cram_name');
   if (saved) $('#name-input').value = saved;
@@ -39,6 +56,7 @@ function show(name) {
 function setPlayer(p) {
   state.player = p;
   localStorage.setItem('cram_name', p.handle);
+  $('#name-input').value = p.handle;
   setCurrency(p.currency || 0);
 }
 function setCurrency(n) {
@@ -51,7 +69,11 @@ function setCurrency(n) {
 // returning name is entered. Returns the player, or null if aborted.
 async function ensurePlayer() {
   const name = $('#name-input').value.trim();
-  if (!name) { nudgeName(); return null; }
+  if (!name) {
+    if (state.player) return state.player; // already logged in this session
+    if (!$('#screen-home').classList.contains('active')) { show('home'); banner('put your name in first ▚'); }
+    nudgeName(); return null;
+  }
   if (state.player && state.player.handle.toLowerCase() === name.toLowerCase()) return state.player;
   let res;
   try { res = await API.player(name); } catch (e) { banner(`✕ ${e.message}`); return null; }
@@ -80,14 +102,23 @@ function wireHome() {
   });
   $('#name-form').addEventListener('submit', (e) => { e.preventDefault(); onMenu('grind'); });
   $('#home-chip').addEventListener('click', async () => { Audio.click(); if (await ensurePlayer()) openShop(); });
+  $('#home-sfx').addEventListener('click', () => { Audio.init(); syncSfx(Audio.toggleSfx()); });
 }
 async function onMenu(action) {
   Audio.click();
   if (action === 'leaderboard') return openBoard();
   if (action === 'info') return show('info');
+  if (action === 'options') return openOptions();
   const p = await ensurePlayer(); if (!p) return;
   if (action === 'grind') startGrind();
   if (action === 'mock') startMock();
+}
+
+// keep both SFX toggles (home + play) in sync
+function syncSfx(on) {
+  const label = on ? '◧ SFX' : '◨ MUTE';
+  const h = $('#home-sfx'); if (h) h.textContent = label;
+  const p = $('#btn-sfx'); if (p) p.textContent = label;
 }
 
 // ── loaders ──────────────────────────────────────────────────────────────────
@@ -95,17 +126,95 @@ function showLoader() { $('#loader-text').textContent = randomLoader(); $('#load
 function hideLoader() { $('#loader').classList.remove('show'); }
 
 // ── grind / mock ─────────────────────────────────────────────────────────────
+async function getGrindQuestions() {
+  if (!state.allQuestions) { const { questions } = await API.questions('grind'); state.allQuestions = questions; }
+  return state.allQuestions;
+}
+function filterPool(all) {
+  const { weeks, types } = state.options;
+  let pool = all.filter((q) => (!weeks || weeks.includes(q.week)) && (!types || types.includes(q.type)));
+  if (!pool.length) pool = all.slice(); // never leave them with an empty grind
+  return pool;
+}
 async function startGrind() {
   state.mode = 'grind'; showLoader();
   try {
-    const { questions } = await API.questions('grind');
-    if (!questions.length) throw new Error('no questions');
-    state.pool = questions; state.queue = shuffle(questions);
+    const all = await getGrindQuestions();
+    if (!all.length) throw new Error('no questions');
+    let pool = filterPool(all);
+    state.orderMode = state.options.order;
+    if (state.orderMode === 'week') pool = pool.slice().sort((a, b) => a.week - b.week || a.seq - b.seq);
+    else pool = shuffle(pool);
+    state.pool = pool; state.queue = pool.slice();
     $('#play-mode').textContent = 'GRIND';
     setTimeout(() => { hideLoader(); show('play'); nextGrind(); }, 480);
   } catch (e) { hideLoader(); banner('✕ ' + e.message); }
 }
-function nextGrind() { if (!state.queue.length) state.queue = shuffle(state.pool); renderQuestion(state.queue.shift()); }
+function nextGrind() {
+  if (!state.queue.length) state.queue = state.orderMode === 'week' ? state.pool.slice() : shuffle(state.pool);
+  renderQuestion(state.queue.shift());
+}
+
+// ── options screen ───────────────────────────────────────────────────────────
+function wireOptions() {
+  $('#btn-opt-grind').addEventListener('click', async () => { Audio.click(); const p = await ensurePlayer(); if (p) startGrind(); });
+  $('#btn-opt-back').addEventListener('click', () => { Audio.click(); show('home'); });
+  $$('#opt-order .tg').forEach((b) => b.addEventListener('click', () => {
+    Audio.click(); state.options.order = b.dataset.order; saveOptions(); renderOrderToggle();
+  }));
+}
+function renderOrderToggle() {
+  $$('#opt-order .tg').forEach((b) => b.classList.toggle('on', b.dataset.order === state.options.order));
+}
+async function openOptions() {
+  show('options'); renderOrderToggle();
+  try {
+    const [meta, all] = await Promise.all([API.meta(), getGrindQuestions()]);
+    state.meta = meta;
+    if (!state.options.weeks) state.options.weeks = meta.weeks.map((w) => w.week);
+    if (!state.options.types) state.options.types = meta.types.map((t) => t.type);
+    renderWeekChips(meta.weeks); renderTypeChips(meta.types); updateOptCount();
+  } catch (e) { $('#opt-weeks').textContent = 'offline: ' + e.message; }
+}
+function renderWeekChips(weeks) {
+  const row = $('#opt-weeks'); row.innerHTML = '';
+  const allOn = state.options.weeks.length === weeks.length;
+  row.append(chip('ALL', allOn, 'all', () => {
+    state.options.weeks = allOn ? [] : weeks.map((w) => w.week);
+    if (!state.options.weeks.length) state.options.weeks = []; // none selected
+    saveOptions(); renderWeekChips(weeks); updateOptCount();
+  }));
+  weeks.forEach((w) => {
+    const on = state.options.weeks.includes(w.week);
+    row.append(chip(`W${w.week}`, on, '', () => { toggle(state.options.weeks, w.week); saveOptions(); renderWeekChips(weeks); updateOptCount(); }, w.n));
+  });
+}
+function renderTypeChips(types) {
+  const row = $('#opt-types'); row.innerHTML = '';
+  const allOn = state.options.types.length === types.length;
+  row.append(chip('ALL', allOn, 'all', () => {
+    state.options.types = allOn ? [] : types.map((t) => t.type);
+    saveOptions(); renderTypeChips(types); updateOptCount();
+  }));
+  types.forEach((t) => {
+    const on = state.options.types.includes(t.type);
+    row.append(chip(TYPE_LABELS[t.type] || t.type.toUpperCase(), on, '', () => { toggle(state.options.types, t.type); saveOptions(); renderTypeChips(types); updateOptCount(); }, t.n));
+  });
+}
+function chip(label, on, extra, onClick, count) {
+  const b = document.createElement('button'); b.type = 'button';
+  b.className = `opt-chip ${extra} ${on ? 'on' : ''}`.trim();
+  b.innerHTML = `${label}${count != null ? `<span class="c-n">${count}</span>` : ''}`;
+  b.addEventListener('click', () => { Audio.hover(); onClick(); });
+  return b;
+}
+function toggle(arr, v) { const i = arr.indexOf(v); if (i >= 0) arr.splice(i, 1); else arr.push(v); }
+function updateOptCount() {
+  const all = state.allQuestions || [];
+  const n = filterPool(all).length;
+  const noneSelected = (state.options.weeks && !state.options.weeks.length) || (state.options.types && !state.options.types.length);
+  $('#opt-count').textContent = noneSelected ? '0 selected → grind falls back to everything' : `${n} questions in the grind pool`;
+}
 
 async function startMock() {
   state.mode = 'mock'; showLoader();
@@ -379,7 +488,7 @@ function wirePlay() {
   $('#btn-board').addEventListener('click', () => { Audio.click(); openBoard(); });
   $('#play-chip').addEventListener('click', () => { Audio.click(); openShop(); });
   $('#btn-exit').addEventListener('click', () => { Audio.click(); show('home'); refreshLive(); }); // no "run" — leave freely
-  $('#btn-sfx').addEventListener('click', () => { Audio.init(); const on = Audio.toggleSfx(); $('#btn-sfx').textContent = on ? '◧ SFX' : '◨ MUTE'; });
+  $('#btn-sfx').addEventListener('click', () => { Audio.init(); syncSfx(Audio.toggleSfx()); });
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────

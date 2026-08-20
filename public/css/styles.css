@@ -359,6 +359,24 @@ body.glitching main { filter: contrast(1.2) saturate(0); }
 .popup-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
 .popup-actions .hud-btn { max-width: 220px; }
 
+/* ── options screen ──────────────────────────────────────────────────────── */
+.opt-group { margin-bottom: 22px; }
+.opt-label { font-family: var(--mono); font-size: 12px; letter-spacing: .12em; color: var(--ink); margin-bottom: 10px; }
+.opt-hint { color: var(--gray); font-size: 11px; letter-spacing: 0; }
+.opt-note { color: var(--gray); font-size: 12px; }
+.chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.opt-chip { font-family: var(--mono); font-size: 13px; padding: 8px 14px; border: 1px solid var(--line); background: var(--panel); color: var(--soft); cursor: pointer; letter-spacing: .04em; transition: background .14s, color .14s, border-color .14s; }
+.opt-chip.on { border-color: var(--ink); background: var(--ink); color: #fff; }
+.opt-chip.all.on { border-color: var(--red); background: var(--red); }
+.opt-chip:hover { border-color: var(--ink); }
+.opt-chip .c-n { color: inherit; opacity: .6; margin-left: 5px; font-size: 11px; }
+.opt-toggle { display: inline-flex; border: 1px solid var(--line); }
+.opt-toggle .tg { font-family: var(--disp); font-weight: 600; font-size: 13px; letter-spacing: .06em; padding: 10px 18px; background: var(--panel); color: var(--soft); cursor: pointer; border: none; }
+.opt-toggle .tg + .tg { border-left: 1px solid var(--line); }
+.opt-toggle .tg.on { background: var(--ink); color: #fff; }
+.opt-count { font-family: var(--mono); font-size: 13px; color: var(--red); margin-bottom: 22px; }
+#screen-options .hud-btn { max-width: 220px; }
+
 /* ── responsive ──────────────────────────────────────────────────────────── */
 @media (max-width: 620px) {
   .hud-btn.small { width: 100%; }

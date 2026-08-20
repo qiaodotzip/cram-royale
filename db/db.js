@@ -34,7 +34,7 @@ export async function initSchema() {
 
     CREATE TABLE IF NOT EXISTS questions (
       id TEXT PRIMARY KEY, source TEXT NOT NULL, part INT, seq INT, topic TEXT,
-      points NUMERIC, type TEXT, exam_odds NUMERIC, stem TEXT, code TEXT,
+      points NUMERIC, type TEXT, exam_odds NUMERIC, week INT, stem TEXT, code TEXT,
       payload JSONB, answer JSONB, explanation TEXT
     );
 
@@ -122,9 +122,16 @@ export async function equipTitle(handle, id) {
 export async function getQuestionsRaw(mode) {
   const where = mode === 'mock' ? `WHERE source = 'mock'` : '';
   const { rows } = await query(
-    `SELECT id, source, part, seq, topic, points, type, stem, code, payload, answer
+    `SELECT id, source, part, seq, topic, points, type, week, stem, code, payload, answer
      FROM questions ${where} ORDER BY seq`);
   return rows;
+}
+
+// distinct weeks and question types with counts (for the options screen)
+export async function getMeta() {
+  const weeks = (await query(`SELECT week, count(*)::int AS n FROM questions GROUP BY week ORDER BY week`)).rows;
+  const types = (await query(`SELECT type, count(*)::int AS n FROM questions GROUP BY type ORDER BY type`)).rows;
+  return { weeks, types };
 }
 export async function getFullQuestion(id) {
   const { rows } = await query(`SELECT * FROM questions WHERE id = $1`, [id]);

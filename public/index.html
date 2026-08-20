@@ -30,6 +30,7 @@
         <h1 class="wordmark">CRAM<span class="unit">S07</span></h1>
         <span class="corner-icon">◤</span>
         <div class="head-right">
+          <button id="home-sfx" class="chip" title="Sound effects">◧ SFX</button>
           <button id="home-chip" class="chip" title="Titles shop">◈ <span id="home-currency">0</span></button>
           <span class="tag-topright">[ DDW·10.020 ]</span>
         </div>
@@ -53,8 +54,11 @@
         <button class="hud-btn ghost" data-action="leaderboard">
           <span class="btn-label">LEADERBOARD</span><span class="btn-arrow">▶</span><span class="btn-num">002</span>
         </button>
+        <button class="hud-btn ghost" data-action="options">
+          <span class="btn-label">OPTIONS</span><span class="btn-arrow">▶</span><span class="btn-num">004</span>
+        </button>
         <button class="hud-btn ghost" data-action="info">
-          <span class="btn-label">INFO</span><span class="btn-arrow">▶</span><span class="btn-num">004</span>
+          <span class="btn-label">INFO</span><span class="btn-arrow">▶</span><span class="btn-num">006</span>
         </button>
         <div class="menu-mini">
           <button class="hud-btn ghost small" data-action="mock">
@@ -130,6 +134,37 @@
         <p class="info-small">questions reconstructed from the DDW mock + practice bank. answers graded server-side. no passwords — your name IS your account.</p>
       </div>
       <button id="btn-info-back" class="hud-btn"><span class="btn-bar"></span><span class="btn-label">BACK</span><span class="btn-arrow">◀</span></button>
+    </section>
+
+    <!-- ── OPTIONS ──────────────────────────────────────────── -->
+    <section id="screen-options" class="screen">
+      <div class="hud-head sub"><span class="slash">//</span><h2 class="wordmark small">OPTIONS</h2><span class="tag-topright">GRIND CONFIG</span></div>
+      <p class="board-sub">tune the <span class="red">grind</span> pool — pick weeks, order, and question types. <span class="opt-note">(the mock paper always stays the real 21.)</span></p>
+
+      <div class="opt-group">
+        <div class="opt-label">WEEKS <span class="opt-hint">tap to include / exclude</span></div>
+        <div id="opt-weeks" class="chip-row">loading…</div>
+      </div>
+
+      <div class="opt-group">
+        <div class="opt-label">ORDER</div>
+        <div class="opt-toggle" id="opt-order">
+          <button type="button" class="tg" data-order="random">RANDOMIZE</button>
+          <button type="button" class="tg" data-order="week">IN WEEK ORDER</button>
+        </div>
+      </div>
+
+      <div class="opt-group">
+        <div class="opt-label">QUESTION TYPES <span class="opt-hint">tap to include / exclude</span></div>
+        <div id="opt-types" class="chip-row">loading…</div>
+      </div>
+
+      <div id="opt-count" class="opt-count">— questions in the pool</div>
+
+      <div class="summary-actions">
+        <button id="btn-opt-grind" class="hud-btn primary"><span class="btn-bar"></span><span class="btn-label">START GRIND</span><span class="btn-arrow">▶</span></button>
+        <button id="btn-opt-back" class="hud-btn ghost"><span class="btn-label">BACK</span><span class="btn-arrow">◀</span></button>
+      </div>
     </section>
 
     <!-- ── MOCK SUMMARY ─────────────────────────────────────── -->
