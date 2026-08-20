@@ -363,15 +363,27 @@ function goNext() {
 }
 
 // ── mock summary ─────────────────────────────────────────────────────────────
-function finishMock() {
+async function finishMock() {
   const m = state.mock; const pct = Math.round((m.score / (m.max || 1)) * 100);
   $('#sum-score').textContent = `${round1(m.score)} / ${m.max}`;
   $('#sum-pct').textContent = `${pct}%`;
   $('#sum-correct').textContent = `${m.correct} / ${m.total}`;
   $('#sum-msg').textContent = pct >= 70 ? 'sharp. clock discipline on Friday and you\'re set.'
     : pct >= 50 ? 'passable. now go grind the weak spots.' : 'rough — but it\'s a mock. go grind, it\'s free reps.';
-  if (pct >= 70) { burst(120); Audio.milestone(); }
+  $('#sum-grade').textContent = '—'; $('#sum-grade').className = 'sum-grade'; $('#sum-title').textContent = 'saving…';
   show('summary');
+  // grade → earned title (server-authoritative)
+  try {
+    const r = await API.mockFinish(state.player.handle, m.score, m.max);
+    $('#sum-grade').textContent = r.grade;
+    $('#sum-grade').className = 'sum-grade g-' + r.grade;
+    $('#sum-title').innerHTML = r.isNew
+      ? `🏷 earned <span class="title-badge">${escapeHtml(r.titleName)}</span> — equip it in the vault`
+      : `<span class="title-badge">${escapeHtml(r.titleName)}</span> (already earned)`;
+    if (r.currency != null) setCurrency(r.currency);
+    if (r.claimable != null) setClaimDot(r.claimable);
+    if (r.grade === 'A' || r.grade === 'B') { burst(150); Audio.milestone(); } else { Audio.correct(); }
+  } catch (e) { $('#sum-title').textContent = ''; }
 }
 
 // ── leaderboard overlay ──────────────────────────────────────────────────────
@@ -414,13 +426,21 @@ async function loadTitles() {
   try {
     const data = await API.titles(state.player.handle);
     setCurrency(data.balance); $('#shop-balance').textContent = fmt(data.balance);
-    grid.innerHTML = data.catalog.map((t) => {
-      const owned = data.owned.includes(t.id); const equipped = data.active === t.id;
-      const btn = equipped ? `<button class="t-btn equipped" data-equip="${t.id}">EQUIPPED</button>`
-        : owned ? `<button class="t-btn owned" data-equip="${t.id}">EQUIP</button>`
-        : `<button class="t-btn" data-buy="${t.id}">BUY</button>`;
+    const equipBtn = (t) => data.active === t.id ? `<button class="t-btn equipped" data-equip="${t.id}">EQUIPPED</button>`
+      : `<button class="t-btn owned" data-equip="${t.id}">EQUIP</button>`;
+    // buyable titles
+    const shop = data.catalog.map((t) => {
+      const owned = data.owned.includes(t.id);
+      const btn = owned ? equipBtn(t) : `<button class="t-btn" data-buy="${t.id}">BUY</button>`;
       return `<div class="shop-item ${owned ? '' : 'locked'}"><span class="t-name">${t.name}</span><span class="t-blurb">${t.blurb}</span><div class="t-row"><span class="t-price">${owned ? 'owned' : '◈ ' + t.price}</span>${btn}</div></div>`;
     }).join('');
+    // earned (grade) titles — from finishing mocks
+    const earned = (data.earned || []).map((t) => {
+      const owned = data.owned.includes(t.id);
+      const btn = owned ? equipBtn(t) : `<button class="t-btn locked" disabled>LOCKED</button>`;
+      return `<div class="shop-item earned ${owned ? '' : 'locked'}"><span class="t-name">${t.name}</span><span class="t-blurb">grade ${t.grade} on a mock paper</span><div class="t-row"><span class="t-price">earned</span>${btn}</div></div>`;
+    }).join('');
+    grid.innerHTML = shop + `<div class="shop-divider">◆ EARNED FROM MOCK GRADES</div>` + earned;
     grid.querySelectorAll('[data-buy]').forEach((b) => b.addEventListener('click', () => buyTitle(b.dataset.buy)));
     grid.querySelectorAll('[data-equip]').forEach((b) => b.addEventListener('click', () => equipTitle(b.dataset.equip)));
   } catch (e) { grid.innerHTML = `<div class="board-empty">shop offline: ${e.message}</div>`; }
@@ -444,7 +464,10 @@ async function loadAchievements() {
     const data = await API.achievements(state.player.handle);
     setCurrency(data.balance); $('#shop-balance').textContent = fmt(data.balance);
     setClaimDot(data.claimable);
-    grid.innerHTML = data.list.map((a) => {
+    // claimable → top, in-progress → middle, claimed → bottom (stable within group)
+    const rank = (a) => (a.claimed ? 2 : a.unlocked ? 0 : 1);
+    const list = data.list.slice().sort((a, b) => rank(a) - rank(b));
+    grid.innerHTML = list.map((a) => {
       const pct = Math.min(100, Math.round((a.current / a.target) * 100));
       const cls = a.claimed ? 'done' : (a.unlocked ? 'claimable' : '');
       const btn = a.claimed ? `<button class="ach-btn claimed" disabled>✓ CLAIMED</button>`

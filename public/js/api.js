@@ -23,4 +23,5 @@ export const API = {
   equipTitle: (handle, id) => jpost('/api/titles/equip', { handle, id }),
   achievements: (handle) => jget(`/api/achievements?handle=${encodeURIComponent(handle)}`),
   claimAchievement: (handle, id) => jpost('/api/achievements/claim', { handle, id }),
+  mockFinish: (handle, score, maxScore) => jpost('/api/mock/finish', { handle, score, maxScore }),
 };

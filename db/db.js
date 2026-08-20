@@ -1,7 +1,7 @@
 // PostgreSQL access layer. Railway injects DATABASE_URL when a Postgres plugin
 // is attached; locally we point at the Docker container (see .env.example).
 import pg from 'pg';
-import { TITLE_MAP } from './titles.js';
+import { TITLE_MAP, GRADE_TITLES, gradeFor } from './titles.js';
 import { ACH_MAP } from './achievements.js';
 
 const { Pool } = pg;
@@ -28,6 +28,7 @@ export async function initSchema() {
       correct     BIGINT DEFAULT 0,
       currency    BIGINT DEFAULT 0,
       gambles_won BIGINT DEFAULT 0,
+      mocks_done  BIGINT DEFAULT 0,
       title       TEXT,
       titles      TEXT[] DEFAULT '{}',
       claimed     TEXT[] DEFAULT '{}',
@@ -37,6 +38,7 @@ export async function initSchema() {
     -- safe migrations for DBs created before these columns existed
     ALTER TABLE players ADD COLUMN IF NOT EXISTS gambles_won BIGINT DEFAULT 0;
     ALTER TABLE players ADD COLUMN IF NOT EXISTS claimed TEXT[] DEFAULT '{}';
+    ALTER TABLE players ADD COLUMN IF NOT EXISTS mocks_done BIGINT DEFAULT 0;
 
     CREATE TABLE IF NOT EXISTS questions (
       id TEXT PRIMARY KEY, source TEXT NOT NULL, part INT, seq INT, topic TEXT,
@@ -63,6 +65,7 @@ export async function initSchema() {
 const shape = (r) => r && ({
   handle: r.handle, answered: Number(r.answered), correct: Number(r.correct),
   currency: Number(r.currency), gambles_won: Number(r.gambles_won || 0),
+  mocks_done: Number(r.mocks_done || 0),
   title: r.title, titles: r.titles || [], claimed: r.claimed || [],
 });
 
@@ -140,6 +143,26 @@ export async function equipTitle(handle, id) {
   const val = id && p.titles.includes(id) ? id : null; // null = unequip
   const { rows } = await query(`UPDATE players SET title = $2 WHERE handle = $1 RETURNING *`, [handle, val]);
   return shape(rows[0]);
+}
+
+// grant a title for free (earned, not bought). auto-equips if nothing equipped.
+export async function grantTitle(handle, id) {
+  const p = await getPlayer(handle);
+  if (!p) throw new Error('unknown player');
+  if (p.titles.includes(id)) return { isNew: false, ...p };
+  const { rows } = await query(
+    `UPDATE players SET titles = array_append(titles, $2), title = COALESCE(title, $2)
+     WHERE handle = $1 RETURNING *`, [handle, id]);
+  return { isNew: true, ...shape(rows[0]) };
+}
+
+// record a finished mock → bump mocks_done + grant the grade title
+export async function finishMock(handle, fraction) {
+  const grade = gradeFor(fraction);
+  const t = GRADE_TITLES[grade];
+  await query(`UPDATE players SET mocks_done = mocks_done + 1, last_seen = now() WHERE handle = $1`, [handle]);
+  const res = await grantTitle(handle, t.id);
+  return { grade, titleId: t.id, titleName: t.name, isNew: res.isNew, ...res };
 }
 
 // ── questions (server keeps the answer to compute odds, then strips it) ──────

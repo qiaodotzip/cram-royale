@@ -12,5 +12,24 @@ export const TITLES = [
   { id: 'mademan',    name: 'KINGPIN',       price: 1500, blurb: 'untouchable. you run the floor.' },
 ];
 
-export const TITLE_MAP = Object.fromEntries(TITLES.map((t) => [t.id, t]));
+// Earned (not bought) by finishing a mock paper, keyed by letter grade.
+export const GRADE_TITLES = {
+  A: { id: 'grade_a', name: 'ACED IT',     grade: 'A', earned: true },
+  B: { id: 'grade_b', name: 'DISTINCTION', grade: 'B', earned: true },
+  C: { id: 'grade_c', name: 'CLUTCH PASS', grade: 'C', earned: true },
+  D: { id: 'grade_d', name: 'SURVIVOR',    grade: 'D', earned: true },
+  F: { id: 'grade_f', name: 'COOKED',      grade: 'F', earned: true },
+};
+export const GRADE_TITLE_LIST = Object.values(GRADE_TITLES);
+
+// letter grade from a mock score fraction
+export function gradeFor(fraction) {
+  if (fraction >= 0.8) return 'A';
+  if (fraction >= 0.65) return 'B';
+  if (fraction >= 0.5) return 'C';
+  if (fraction >= 0.35) return 'D';
+  return 'F';
+}
+
+export const TITLE_MAP = Object.fromEntries([...TITLES, ...GRADE_TITLE_LIST].map((t) => [t.id, t]));
 export const titleName = (id) => TITLE_MAP[id]?.name || null;

@@ -6,13 +6,13 @@ import { fileURLToPath } from 'node:url';
 
 import {
   initSchema, loginOrCreate, getPlayer, bumpAnswered, addCurrency, touchPlayer, bumpGamblesWon,
-  buyTitle, equipTitle, claimAchievement, getQuestionsRaw, getFullQuestion, getMeta,
+  buyTitle, equipTitle, claimAchievement, finishMock, getQuestionsRaw, getFullQuestion, getMeta,
   topGrinders, liveStats, addAnnouncement, getAnnouncements, pool,
 } from './db/db.js';
 import { seedQuestions, questionCount } from './db/seed.js';
 import { gradeAnswer, isMilestone } from './db/grader.js';
 import { computeOdds } from './db/odds.js';
-import { TITLES, titleName } from './db/titles.js';
+import { TITLES, GRADE_TITLE_LIST, titleName } from './db/titles.js';
 import { evalAchievements, claimableCount } from './db/achievements.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -125,7 +125,20 @@ app.get('/api/announcements', async (req, res) => {
 app.get('/api/titles', async (req, res) => {
   try {
     const p = await getPlayer(clean(req.query.handle));
-    res.json({ catalog: TITLES, balance: p ? p.currency : 0, owned: p ? p.titles : [], active: p ? p.title : null });
+    res.json({ catalog: TITLES, earned: GRADE_TITLE_LIST, balance: p ? p.currency : 0, owned: p ? p.titles : [], active: p ? p.title : null });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// finish a mock paper → grant the grade title + bump mocks_done
+app.post('/api/mock/finish', async (req, res) => {
+  try {
+    const handle = clean(req.body?.handle);
+    if (!handle) return res.status(400).json({ error: 'name required' });
+    const score = Number(req.body?.score) || 0;
+    const maxScore = Number(req.body?.maxScore) || 1;
+    const fraction = Math.max(0, Math.min(1, maxScore ? score / maxScore : 0));
+    const r = await finishMock(handle, fraction);
+    res.json({ grade: r.grade, titleId: r.titleId, titleName: r.titleName, isNew: r.isNew, currency: r.currency, claimable: claimableCount(r) });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.post('/api/titles/buy', async (req, res) => {
