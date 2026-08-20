@@ -68,19 +68,21 @@ app.post('/api/check', async (req, res) => {
       const row = await bumpAnswered(handle, verdict.correct);
       answered = row ? Number(row.answered) : null;
       const activeTitle = titleName(row?.title);
-      // milestone announcements + gamble payouts are grind-only
-      if (mode === 'grind') {
-        if (answered != null && isMilestone(answered)) {
-          await addAnnouncement(handle, activeTitle, 'milestone', answered, null);
-          milestone = answered;
-        }
-        if (gambled && verdict.correct) {
-          const odds = computeOdds(q);
-          gamblePayout = odds.gamblePayout;
-          currency = await addCurrency(handle, gamblePayout);
+      // milestone announcements are grind-only
+      if (mode === 'grind' && answered != null && isMilestone(answered)) {
+        await addAnnouncement(handle, activeTitle, 'milestone', answered, null);
+        milestone = answered;
+      }
+      // gambling pays out in EVERY mode, proportional to the marks you earned
+      // (so partial credit still pays — no more all-or-nothing)
+      if (gambled && verdict.fraction > 0) {
+        const odds = computeOdds(q);
+        gamblePayout = Math.max(1, Math.round(odds.gamblePayout * verdict.fraction));
+        currency = await addCurrency(handle, gamblePayout);
+        gambleWin = true;
+        if (verdict.fraction >= 0.999) { // a clean hit counts as a "win" + gets broadcast
           await bumpGamblesWon(handle);
           await addAnnouncement(handle, activeTitle, 'gamble', null, odds.headline);
-          gambleWin = true;
         }
       }
       claimable = claimableCount(await getPlayer(handle)); // vault "!" dot

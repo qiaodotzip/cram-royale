@@ -236,8 +236,7 @@ function renderQuestion(q) {
   const rp = $('#result-panel'); rp.classList.add('hidden'); rp.innerHTML = '';
   $('#odds-panel').classList.remove('hidden');
   $('#btn-confirm').classList.remove('hidden'); $('#btn-confirm').disabled = false;
-  $('#btn-gamble').disabled = false;
-  $('#btn-gamble').style.display = state.mode === 'grind' ? '' : 'none'; // gambling only pays in grind
+  $('#btn-gamble').disabled = false; $('#btn-gamble').style.display = ''; // gamble in every mode
 
   if (state.mode === 'grind') {
     $('#play-counter').textContent = `ANSWERED · ${fmt(state.player.answered || 0)}`;
@@ -317,8 +316,8 @@ function applyResult(q, res, gambled) {
   const nextLabel = state.mode === 'mock' ? (last ? 'SEE RESULTS' : 'NEXT') : 'NEXT';
 
   let gambleLine = '';
-  if (gambled && res.gambleWin) gambleLine = `<div class="gamble-win">🎲 GAMBLE LANDED — <b>+◈${fmt(res.gamblePayout)}</b></div>`;
-  else if (gambled) gambleLine = `<div class="gamble-lose">🎲 the house wins. as usual.</div>`;
+  if (gambled && res.gambleWin) gambleLine = `<div class="gamble-win">🎲 GAMBLE PAID OUT — <b>+◈${fmt(res.gamblePayout)}</b> <span style="opacity:.65">(${Math.round(res.fraction * 100)}% of the marks)</span></div>`;
+  else if (gambled) gambleLine = `<div class="gamble-lose">🎲 zero marks, zero payout. the house wins.</div>`;
 
   const rp = $('#result-panel');
   rp.innerHTML = `
@@ -336,15 +335,20 @@ function applyResult(q, res, gambled) {
 
   if (res.correct) Audio.correct(); else Audio.wrong();
 
+  // currency + gamble payout apply in every mode now
+  if (res.currency != null) setCurrency(res.currency);
+  if (res.gambleWin) {
+    burst(120); Audio.milestone();
+    enqueueBanner(`<span class="glyph">◈</span> YOU GAMBLED &amp; WON <span class="big">+${fmt(res.gamblePayout)}</span> <span class="a-tag">${Math.round(res.fraction * 100)}% HIT</span>`);
+  }
+
+  // grind-only: the live answered counter + milestone announcements
   if (state.mode === 'grind') {
     if (res.answered != null) {
       state.player.answered = res.answered;
       $('#play-counter').textContent = `ANSWERED · ${fmt(res.answered)}`;
       $('#play-progressbar').style.width = `${((res.answered % 25) / 25) * 100}%`;
     }
-    if (res.currency != null) setCurrency(res.currency);
-    // own events → immediate banner (poll skips our own to avoid doubles)
-    if (res.gambleWin) { burst(150); Audio.milestone(); enqueueBanner(`<span class="glyph">◈</span> YOU GAMBLED &amp; WON <span class="big">+${fmt(res.gamblePayout)}</span> <span class="a-tag">${state.currentQ.odds?.headline || ''} SHOT</span>`); }
     if (res.milestone) { burst(120); Audio.milestone(); enqueueBanner(`<span class="glyph">▚</span> YOU HIT <span class="big">${res.milestone}</span> QUESTIONS <span class="a-tag">KEEP GRINDING</span>`); }
   }
   if (state.mode !== 'grind' && state.mock) { state.mock.score += res.pointsAwarded; if (res.correct) state.mock.correct++; }
