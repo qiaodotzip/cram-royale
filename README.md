@@ -46,22 +46,37 @@ npm run seed      # loads the 71 questions (also runs automatically on first boo
 npm start         # → http://localhost:3000
 ```
 
-## Deploy to Railway
+The app seeds its own schema + questions on boot, so once `DATABASE_URL` is present it
+just works. Two ways to deploy:
 
-The app seeds its own schema + questions on boot, so deployment is just:
+### Option A — Dashboard, from the private repo (recommended)
+
+1. [railway.app](https://railway.app) → **New Project → Deploy from GitHub repo** → pick
+   `cram-royale`. Railway auto-detects Node (Nixpacks) and runs `npm start`.
+2. In the project, **+ New → Database → PostgreSQL**.
+3. Open the **app service → Variables → New Variable** and add a *reference*:
+   `DATABASE_URL = ${{Postgres.DATABASE_URL}}` (Railway autocompletes the `${{ … }}`).
+4. It redeploys, seeds the 71 questions on boot, and gives you a public domain under
+   **Settings → Networking → Generate Domain**.
+
+This path also auto-deploys on every `git push`.
+
+### Option B — CLI
 
 ```bash
 railway login                     # opens a browser (one-time)
-railway init                      # create/select a project
-railway add --database postgres   # provision Postgres (injects DATABASE_URL)
-railway up                        # build & deploy
+railway init --name cram-royale   # create a project
+railway add --database postgres   # provision Postgres
+railway up --detach               # build & deploy the app service
+# wire the DB into the app service (Railway does NOT auto-link across services):
+railway variables --set "DATABASE_URL=\${{Postgres.DATABASE_URL}}"
 railway domain                    # get a public URL
 ```
 
-`DATABASE_URL` is injected automatically once the Postgres plugin is attached — no
-config needed. If you ever point the app at Railway's **public** proxy URL instead of
-the private one, set `DATABASE_SSL=true`.
-
+> ⚠️ Railway does **not** auto-inject `DATABASE_URL` into the app service — you must add
+> the reference variable (step A3 / the `railway variables` line). If you point the app
+> at Railway's **public** proxy URL instead of the private one, also set `DATABASE_SSL=true`.
+>
 > 💸 Railway bills for usage. Deploy when you're ready.
 
 ## Environment variables
