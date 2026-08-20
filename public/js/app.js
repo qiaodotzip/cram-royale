@@ -364,7 +364,7 @@ function finishMock() {
 // ── leaderboard overlay ──────────────────────────────────────────────────────
 function openBoard() {
   $('#board-overlay').classList.add('open'); loadBoard();
-  clearInterval(state.boardTimer); state.boardTimer = setInterval(loadBoard, 12000);
+  clearInterval(state.boardTimer); state.boardTimer = setInterval(loadBoard, 5000);
 }
 function closeBoard() { $('#board-overlay').classList.remove('open'); clearInterval(state.boardTimer); }
 async function loadBoard() {
@@ -479,6 +479,7 @@ async function pollAnnouncements(first) {
     if (!rows.length) { if (first && state.lastAnnId == null) state.lastAnnId = 0; return; }
     const maxId = Math.max(...rows.map((r) => r.id));
     if (first || state.lastAnnId == null) { state.lastAnnId = maxId; buildTicker(rows); return; }
+    const fresh = maxId > state.lastAnnId;
     rows.slice().reverse().forEach((r) => {
       if (r.id <= state.lastAnnId) return;
       if (state.player && r.handle === state.player.handle) return; // own → shown inline already
@@ -486,6 +487,8 @@ async function pollAnnouncements(first) {
     });
     state.lastAnnId = Math.max(state.lastAnnId, maxId);
     buildTicker(rows);
+    // someone just hit a milestone/gamble → their rank likely moved; refresh now
+    if (fresh && $('#board-overlay').classList.contains('open')) loadBoard();
   } catch {}
 }
 function announcementHtml(r) {
