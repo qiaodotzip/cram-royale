@@ -155,6 +155,8 @@ main { position: relative; z-index: 1; }
 
 /* stem / markdown */
 .q-body { margin-bottom: 18px; }
+.q-images { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+.q-image { max-width: 100%; border: 1px solid var(--line); border-left: 3px solid var(--ink); background: #fff; display: block; }
 .q-stem { font-size: 16px; line-height: 1.6; color: var(--ink-2); }
 .q-stem p { margin: 8px 0; }
 .q-stem strong { color: var(--ink); font-weight: 700; }
@@ -396,6 +398,9 @@ body.glitching main { filter: contrast(1.2) saturate(0); }
 .popup-msg b { color: var(--ink); }
 .popup-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
 .popup-actions .hud-btn { max-width: 220px; }
+.mock-choice { display: flex; flex-direction: column; gap: 12px; margin-bottom: 10px; text-align: left; }
+.mock-choice .hud-btn { max-width: none; }
+.mock-note { font-size: 11px; color: var(--gray); font-style: italic; margin-bottom: 14px; }
 
 /* ── options screen ──────────────────────────────────────────────────────── */
 .opt-group { margin-bottom: 22px; }

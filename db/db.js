@@ -41,8 +41,9 @@ export async function initSchema() {
     CREATE TABLE IF NOT EXISTS questions (
       id TEXT PRIMARY KEY, source TEXT NOT NULL, part INT, seq INT, topic TEXT,
       points NUMERIC, type TEXT, exam_odds NUMERIC, week INT, stem TEXT, code TEXT,
-      payload JSONB, answer JSONB, explanation TEXT
+      images TEXT[], payload JSONB, answer JSONB, explanation TEXT
     );
+    ALTER TABLE questions ADD COLUMN IF NOT EXISTS images TEXT[];
 
     CREATE TABLE IF NOT EXISTS announcements (
       id         SERIAL PRIMARY KEY,
@@ -143,9 +144,12 @@ export async function equipTitle(handle, id) {
 
 // ── questions (server keeps the answer to compute odds, then strips it) ──────
 export async function getQuestionsRaw(mode) {
-  const where = mode === 'mock' ? `WHERE source = 'mock'` : '';
+  // grind = everything EXCEPT the image-based actual paper (it duplicates the mock)
+  let where = `WHERE source <> 'actual'`;
+  if (mode === 'mock') where = `WHERE source = 'mock'`;
+  else if (mode === 'actual') where = `WHERE source = 'actual'`;
   const { rows } = await query(
-    `SELECT id, source, part, seq, topic, points, type, week, stem, code, payload, answer
+    `SELECT id, source, part, seq, topic, points, type, week, stem, code, images, payload, answer
      FROM questions ${where} ORDER BY seq`);
   return rows;
 }
@@ -165,7 +169,7 @@ export async function getFullQuestion(id) {
 export async function topGrinders(limit = 25) {
   const { rows } = await query(
     `SELECT handle, answered, correct, title FROM players
-      WHERE answered > 0 ORDER BY answered DESC, correct DESC, last_seen ASC LIMIT $1`, [limit]);
+      WHERE answered > 0 ORDER BY correct DESC, answered DESC, last_seen ASC LIMIT $1`, [limit]);
   return rows;
 }
 export async function liveStats() {

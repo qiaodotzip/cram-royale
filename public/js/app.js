@@ -112,7 +112,7 @@ async function onMenu(action) {
   if (action === 'options') return openOptions();
   const p = await ensurePlayer(); if (!p) return;
   if (action === 'grind') startGrind();
-  if (action === 'mock') startMock();
+  if (action === 'mock') $('#mock-popup').classList.add('open'); // choose AI vs actual
 }
 
 // keep both SFX toggles (home + play) in sync
@@ -217,14 +217,15 @@ function updateOptCount() {
   $('#opt-count').textContent = noneSelected ? '0 selected → grind falls back to everything' : `${n} questions in the grind pool`;
 }
 
-async function startMock() {
-  state.mode = 'mock'; showLoader();
+async function startMock(mode = 'mock') {
+  $('#mock-popup').classList.remove('open');
+  state.mode = mode; showLoader();
   try {
-    const { questions } = await API.questions('mock');
+    const { questions } = await API.questions(mode);
     if (!questions.length) throw new Error('no mock questions');
     state.mockList = questions; state.mockIdx = 0;
     state.mock = { score: 0, max: questions.reduce((a, q) => a + Number(q.points), 0), correct: 0, total: questions.length };
-    $('#play-mode').textContent = 'MOCK';
+    $('#play-mode').textContent = mode === 'actual' ? 'MOCK · ACTUAL' : 'MOCK · AI';
     setTimeout(() => { hideLoader(); show('play'); renderQuestion(state.mockList[0]); }, 480);
   } catch (e) { hideLoader(); banner('✕ ' + e.message); }
 }
@@ -236,6 +237,7 @@ function renderQuestion(q) {
   $('#odds-panel').classList.remove('hidden');
   $('#btn-confirm').classList.remove('hidden'); $('#btn-confirm').disabled = false;
   $('#btn-gamble').disabled = false;
+  $('#btn-gamble').style.display = state.mode === 'grind' ? '' : 'none'; // gambling only pays in grind
 
   if (state.mode === 'grind') {
     $('#play-counter').textContent = `ANSWERED · ${fmt(state.player.answered || 0)}`;
@@ -248,11 +250,18 @@ function renderQuestion(q) {
   $('#q-id').textContent = String(q.seq).padStart(3, '0');
   $('#q-topic').textContent = q.topic;
   $('#q-points').textContent = `${q.points} PT${Number(q.points) === 1 ? '' : 'S'}`;
-  const src = $('#q-source'); src.textContent = q.source === 'mock' ? 'MOCK' : 'PREDICTED';
-  src.className = 'q-source ' + (q.source === 'mock' ? 'mock' : '');
+  const src = $('#q-source');
+  src.textContent = q.source === 'mock' ? 'MOCK' : q.source === 'actual' ? 'ACTUAL' : 'PREDICTED';
+  src.className = 'q-source ' + (q.source === 'mock' || q.source === 'actual' ? 'mock' : '');
 
   state.current = renderWidget(q, () => {});
   const body = $('#q-body'); body.innerHTML = '';
+  // actual paper: the real exam screenshots ARE the question
+  if (q.images && q.images.length) {
+    const iw = el('div', 'q-images');
+    q.images.forEach((src) => { const img = document.createElement('img'); img.src = src; img.className = 'q-image'; img.loading = 'lazy'; img.alt = 'exam question'; iw.append(img); });
+    body.append(iw);
+  }
   body.append(el('div', 'q-stem', md(q.stem)));
   const widgetOwnsCode = q.type === 'dropdowns' && q.code && /⟨/.test(q.code);
   if (q.code && !widgetOwnsCode) { const pre = document.createElement('pre'); pre.className = 'md-pre'; pre.textContent = q.code; body.append(pre); }
@@ -334,12 +343,12 @@ function applyResult(q, res, gambled) {
       $('#play-progressbar').style.width = `${((res.answered % 25) / 25) * 100}%`;
     }
     if (res.currency != null) setCurrency(res.currency);
-    if (res.claimable != null) setClaimDot(res.claimable);
     // own events → immediate banner (poll skips our own to avoid doubles)
     if (res.gambleWin) { burst(150); Audio.milestone(); enqueueBanner(`<span class="glyph">◈</span> YOU GAMBLED &amp; WON <span class="big">+${fmt(res.gamblePayout)}</span> <span class="a-tag">${state.currentQ.odds?.headline || ''} SHOT</span>`); }
     if (res.milestone) { burst(120); Audio.milestone(); enqueueBanner(`<span class="glyph">▚</span> YOU HIT <span class="big">${res.milestone}</span> QUESTIONS <span class="a-tag">KEEP GRINDING</span>`); }
   }
-  if (state.mode === 'mock') { state.mock.score += res.pointsAwarded; if (res.correct) state.mock.correct++; }
+  if (state.mode !== 'grind' && state.mock) { state.mock.score += res.pointsAwarded; if (res.correct) state.mock.correct++; }
+  if (res.claimable != null) setClaimDot(res.claimable); // any mode can unlock achievements
 }
 
 function goNext() {
@@ -378,7 +387,7 @@ async function loadBoard() {
       const top = i === 0 ? ' top' : '';
       const rank = String(i + 1).padStart(2, '0');
       const badge = r.title ? `<span class="title-badge">${escapeHtml(r.title)}</span>` : '';
-      return `<div class="board-row${top}${me}"><span class="board-rank">${rank}</span><span class="board-name">${badge}${escapeHtml(r.handle)}</span><span class="board-val"><b>${fmt(r.answered)}</b> answered</span></div>`;
+      return `<div class="board-row${top}${me}"><span class="board-rank">${rank}</span><span class="board-name">${badge}${escapeHtml(r.handle)}</span><span class="board-val"><b>${fmt(r.correct)}</b> correct</span></div>`;
     }).join('');
   } catch (e) { body.innerHTML = `<div class="board-empty">board offline: ${e.message}</div>`; }
 }
@@ -535,6 +544,11 @@ function wireStatic() {
   $('#btn-info-back').addEventListener('click', () => { Audio.click(); show('home'); });
   $('#btn-sum-grind').addEventListener('click', () => { Audio.click(); startGrind(); });
   $('#btn-sum-home').addEventListener('click', () => { Audio.click(); show('home'); });
+  // mock paper choice
+  $('#mock-ai').addEventListener('click', () => { Audio.select(); startMock('mock'); });
+  $('#mock-actual').addEventListener('click', () => { Audio.select(); startMock('actual'); });
+  $('#mock-cancel').addEventListener('click', () => { Audio.click(); $('#mock-popup').classList.remove('open'); });
+  $('#mock-popup').addEventListener('click', (e) => { if (e.target.id === 'mock-popup') $('#mock-popup').classList.remove('open'); });
 }
 function wirePlay() {
   $('#btn-confirm').addEventListener('click', confirmAnswer);

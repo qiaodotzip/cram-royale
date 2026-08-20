@@ -126,8 +126,8 @@
       <div class="hud-head sub"><span class="slash">//</span><h2 class="wordmark small">INFO</h2></div>
       <div class="info-body">
         <p><b>CRAM // S07</b> is a question grinder for the DDW 10.020 final (Fri 21 Aug).</p>
-        <p><span class="red">▚</span> <b>START GRIND</b> — endless practice from the mock + a bank of predicted questions. Every answer bumps your count on the <b>leaderboard</b>. Right or wrong doesn't matter — reps do. Hop in and out whenever.</p>
-        <p><span class="red">▚</span> <b>MOCK PAPER</b> — the real mock paper, in order. Side mode, no leaderboard.</p>
+        <p><span class="red">▚</span> <b>START GRIND</b> — endless practice from the mock + a bank of predicted questions. The <b>leaderboard</b> ranks you by <b>correct answers</b> (grind + mock papers all count). Hop in and out whenever.</p>
+        <p><span class="red">▚</span> <b>MOCK PAPER</b> — choose the <b>AI-generated</b> paper (typed) or the <b>actual paper</b> (the real exam screenshots). Both count toward the board.</p>
         <p><span class="red">▚</span> <b>GUESS ODDS</b> — your odds of guessing a question right, with the real breakdown. Hit <b>I'LL GAMBLE</b> to auto-submit a random answer; land it and you win <b>◈ currency</b> + a global shout-out.</p>
         <p><span class="red">▚</span> spend currency on <b>gambling titles</b> that show next to your name on the board.</p>
         <p><span class="red">▚</span> get a question wrong and it explains why. that's the actual point.</p>
@@ -187,7 +187,7 @@
   <div id="board-overlay" class="overlay">
     <div class="overlay-card board-card">
       <div class="overlay-head"><span class="slash">//</span><h3>LEADERBOARD</h3><span id="board-online" class="overlay-tag">— online</span><button id="board-close" class="x-btn">✕</button></div>
-      <p class="board-sub">it's practice — <span class="red">right or wrong doesn't matter.</span> only the grind counts.</p>
+      <p class="board-sub">ranked by <span class="red">correct answers</span> — grind + both mock papers all count.</p>
       <div id="board-body" class="board-body"></div>
     </div>
   </div>
@@ -221,6 +221,21 @@
         <button id="popup-continue" class="hud-btn primary"><span class="btn-bar"></span><span class="btn-label">CONTINUE</span><span class="btn-arrow">▶</span></button>
         <button id="popup-cancel" class="hud-btn ghost"><span class="btn-label">DIFFERENT NAME</span></button>
       </div>
+    </div>
+  </div>
+
+  <!-- ── MOCK PAPER CHOICE POPUP ─────────────────────────────── -->
+  <div id="mock-popup" class="overlay">
+    <div class="overlay-card popup-card">
+      <div class="popup-glyph">▤</div>
+      <h3 class="popup-title">CHOOSE YOUR PAPER</h3>
+      <p class="popup-msg">the same 21-question mock, two ways. both count toward the board.</p>
+      <div class="mock-choice">
+        <button id="mock-ai" class="hud-btn primary"><span class="btn-bar"></span><span class="btn-label">AI-GENERATED</span><span class="btn-arrow">▶</span></button>
+        <button id="mock-actual" class="hud-btn"><span class="btn-bar"></span><span class="btn-label">ACTUAL PAPER</span><span class="btn-arrow">▶</span></button>
+      </div>
+      <p class="mock-note">AI-generated = typed &amp; searchable · actual = the real exam screenshots</p>
+      <button id="mock-cancel" class="mini-btn">◀ back</button>
     </div>
   </div>
 

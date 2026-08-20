@@ -22,7 +22,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 async function boot() {
   await initSchema();
-  if ((await questionCount()) === 0) { console.log('Seeding questions…'); await seedQuestions(); }
+  // idempotent upsert on every boot → the question set stays current after each deploy
+  await seedQuestions();
   console.log(`📚 ${await questionCount()} questions loaded.`);
 }
 const clean = (s, max = 24) => String(s || '').trim().slice(0, max);
@@ -62,24 +63,27 @@ app.post('/api/check', async (req, res) => {
     const verdict = gradeAnswer(q, response);
     let answered = null, milestone = null, currency = null, gambleWin = false, gamblePayout = 0, claimable = null;
 
-    if (handle && mode === 'grind') {
+    // every real mode (grind + both mock papers) counts toward answered/correct
+    if (handle && ['grind', 'mock', 'actual'].includes(mode)) {
       const row = await bumpAnswered(handle, verdict.correct);
       answered = row ? Number(row.answered) : null;
       const activeTitle = titleName(row?.title);
-      if (answered != null && isMilestone(answered)) {
-        await addAnnouncement(handle, activeTitle, 'milestone', answered, null);
-        milestone = answered;
+      // milestone announcements + gamble payouts are grind-only
+      if (mode === 'grind') {
+        if (answered != null && isMilestone(answered)) {
+          await addAnnouncement(handle, activeTitle, 'milestone', answered, null);
+          milestone = answered;
+        }
+        if (gambled && verdict.correct) {
+          const odds = computeOdds(q);
+          gamblePayout = odds.gamblePayout;
+          currency = await addCurrency(handle, gamblePayout);
+          await bumpGamblesWon(handle);
+          await addAnnouncement(handle, activeTitle, 'gamble', null, odds.headline);
+          gambleWin = true;
+        }
       }
-      if (gambled && verdict.correct) {
-        const odds = computeOdds(q);
-        gamblePayout = odds.gamblePayout;
-        currency = await addCurrency(handle, gamblePayout);
-        await bumpGamblesWon(handle);
-        await addAnnouncement(handle, activeTitle, 'gamble', null, odds.headline);
-        gambleWin = true;
-      }
-      // how many achievements are now claimable (drives the vault "!" dot)
-      claimable = claimableCount(await getPlayer(handle));
+      claimable = claimableCount(await getPlayer(handle)); // vault "!" dot
     } else if (handle) { await touchPlayer(handle); }
 
     res.json({

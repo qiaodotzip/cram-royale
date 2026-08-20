@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { initSchema, query, pool } from './db.js';
 import { mockQuestions } from '../data/mock-questions.js';
 import { predictedQuestions } from '../data/predicted-questions.js';
+import { actualMockQuestions } from '../data/actual-mock-questions.js';
 
 // Map a topic string to its DDW week. Order matters — more specific first.
 export function weekFor(topic = '') {
@@ -29,18 +30,18 @@ export function weekFor(topic = '') {
 
 export async function seedQuestions() {
   await initSchema();
-  const all = [...mockQuestions, ...predictedQuestions];
+  const all = [...mockQuestions, ...predictedQuestions, ...actualMockQuestions];
   for (const q of all) {
     const week = q.week ?? weekFor(q.topic);
     await query(
       `INSERT INTO questions (id, source, part, seq, topic, points, type, exam_odds, week,
-                              stem, code, payload, answer, explanation)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+                              stem, code, images, payload, answer, explanation)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
        ON CONFLICT (id) DO UPDATE SET
          source=$2, part=$3, seq=$4, topic=$5, points=$6, type=$7, exam_odds=$8, week=$9,
-         stem=$10, code=$11, payload=$12, answer=$13, explanation=$14`,
+         stem=$10, code=$11, images=$12, payload=$13, answer=$14, explanation=$15`,
       [q.id, q.source, q.part, q.seq, q.topic, q.points, q.type, q.examOdds, week,
-       q.stem, q.code, JSON.stringify(q.payload), JSON.stringify(q.answer), q.explanation]
+       q.stem, q.code, q.images || null, JSON.stringify(q.payload), JSON.stringify(q.answer), q.explanation]
     );
   }
   const { rows } = await query('SELECT count(*)::int AS n FROM questions');
