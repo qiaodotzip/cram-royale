@@ -12,8 +12,6 @@ if (!connectionString) {
   process.exit(1);
 }
 
-// SSL: Railway's internal network needs none; the public proxy does. Opt in with
-// DATABASE_SSL=true (or a sslmode=require in the URL).
 const needsSsl = process.env.DATABASE_SSL === 'true' || /sslmode=require/.test(connectionString);
 
 export const pool = new Pool({
@@ -30,8 +28,9 @@ export async function initSchema() {
     CREATE TABLE IF NOT EXISTS players (
       id         SERIAL PRIMARY KEY,
       handle     TEXT UNIQUE NOT NULL,
-      emoji      TEXT DEFAULT '🎰',
-      chips      BIGINT DEFAULT 1000,
+      emoji      TEXT DEFAULT '',
+      answered   BIGINT DEFAULT 0,
+      correct    BIGINT DEFAULT 0,
       created_at TIMESTAMPTZ DEFAULT now(),
       last_seen  TIMESTAMPTZ DEFAULT now()
     );
@@ -52,83 +51,58 @@ export async function initSchema() {
       explanation TEXT
     );
 
-    CREATE TABLE IF NOT EXISTS runs (
-      id            SERIAL PRIMARY KEY,
-      player_id     INT REFERENCES players(id) ON DELETE CASCADE,
-      handle        TEXT,
-      mode          TEXT,
-      score         NUMERIC,
-      max_score     NUMERIC,
-      correct_count INT,
-      total_count   INT,
-      chips_delta   BIGINT,
-      duration_ms   BIGINT,
-      accuracy      NUMERIC,
-      created_at    TIMESTAMPTZ DEFAULT now()
+    CREATE TABLE IF NOT EXISTS announcements (
+      id         SERIAL PRIMARY KEY,
+      handle     TEXT,
+      emoji      TEXT,
+      milestone  BIGINT,
+      created_at TIMESTAMPTZ DEFAULT now()
     );
 
-    CREATE TABLE IF NOT EXISTS answers_log (
-      id          SERIAL PRIMARY KEY,
-      run_id      INT REFERENCES runs(id) ON DELETE CASCADE,
-      question_id TEXT,
-      correct     BOOLEAN,
-      points      NUMERIC,
-      wager       BIGINT,
-      payout      BIGINT,
-      created_at  TIMESTAMPTZ DEFAULT now()
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_runs_score ON runs (score DESC);
-    CREATE INDEX IF NOT EXISTS idx_players_chips ON players (chips DESC);
+    CREATE INDEX IF NOT EXISTS idx_players_answered ON players (answered DESC);
+    CREATE INDEX IF NOT EXISTS idx_ann_id ON announcements (id DESC);
   `);
 }
 
 // ── players ──────────────────────────────────────────────────────────────────
-export async function getOrCreatePlayer(handle, emoji = '🎰') {
+export async function getOrCreatePlayer(handle, emoji = '') {
   handle = String(handle || '').trim().slice(0, 24);
-  if (!handle) throw new Error('handle required');
+  if (!handle) throw new Error('name required');
   const { rows } = await query(
     `INSERT INTO players (handle, emoji) VALUES ($1, $2)
-     ON CONFLICT (handle) DO UPDATE SET last_seen = now()
-     RETURNING id, handle, emoji, chips`,
+     ON CONFLICT (handle) DO UPDATE SET last_seen = now(),
+       emoji = COALESCE(NULLIF(EXCLUDED.emoji, ''), players.emoji)
+     RETURNING id, handle, emoji, answered, correct`,
     [handle, emoji]
   );
   return rows[0];
 }
 
-export async function adjustChips(handle, delta) {
+// Increment a grinder's answered count (and correct tally). Returns the new
+// answered total so the caller can check for milestones.
+export async function bumpAnswered(handle, wasCorrect) {
   const { rows } = await query(
-    `UPDATE players SET chips = GREATEST(0, chips + $2), last_seen = now()
-     WHERE handle = $1 RETURNING chips`,
-    [handle, Math.round(delta)]
+    `UPDATE players
+       SET answered = answered + 1,
+           correct  = correct + $2,
+           last_seen = now()
+     WHERE handle = $1
+     RETURNING answered, correct`,
+    [handle, wasCorrect ? 1 : 0]
   );
-  return rows[0]?.chips ?? null;
+  return rows[0] || null;
 }
 
-export async function setChips(handle, value) {
-  const { rows } = await query(
-    `UPDATE players SET chips = GREATEST(0, $2) WHERE handle = $1 RETURNING chips`,
-    [handle, Math.round(value)]
-  );
-  return rows[0]?.chips ?? null;
+export async function touchPlayer(handle) {
+  await query(`UPDATE players SET last_seen = now() WHERE handle = $1`, [handle]);
 }
 
-// ── questions ────────────────────────────────────────────────────────────────
-// Never selects the `answer` column — that stays server-side.
+// ── questions (never selects the `answer` column) ────────────────────────────
 export async function getQuestionsForClient(mode) {
-  let where = '';
-  const params = [];
-  if (mode === 'mock') where = `WHERE source = 'mock'`;
-  else if (mode === 'predicted') where = `WHERE source = 'predicted'`;
-  else if (mode === 'blitz') where = `WHERE type = 'multiselect'`;
-  // 'all' → no filter
-  // Order by the original sequence (seq), NOT by part — this preserves the real
-  // mock order Q1…Q21 and keeps chained questions (e.g. the Q17→Q21 linreg chain)
-  // contiguous. 'all' mode is shuffled server-side afterwards.
+  const where = mode === 'mock' ? `WHERE source = 'mock'` : ''; // grind = everything
   const { rows } = await query(
     `SELECT id, source, part, seq, topic, points, type, exam_odds, stem, code, payload
-     FROM questions ${where} ORDER BY seq`,
-    params
+     FROM questions ${where} ORDER BY seq`
   );
   return rows;
 }
@@ -138,39 +112,46 @@ export async function getFullQuestion(id) {
   return rows[0] || null;
 }
 
-// ── runs & leaderboard ───────────────────────────────────────────────────────
-export async function recordRun(run) {
+// ── leaderboard (grind: rank by # answered) ──────────────────────────────────
+export async function topGrinders(limit = 25) {
   const { rows } = await query(
-    `INSERT INTO runs (player_id, handle, mode, score, max_score, correct_count,
-                       total_count, chips_delta, duration_ms, accuracy)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id, created_at`,
-    [run.playerId, run.handle, run.mode, run.score, run.maxScore, run.correctCount,
-     run.totalCount, run.chipsDelta, run.durationMs, run.accuracy]
-  );
-  return rows[0];
-}
-
-export async function topScores(mode, limit = 20) {
-  const useMode = ['mock', 'predicted', 'all', 'blitz'].includes(mode);
-  const params = useMode ? [mode, limit] : [limit];
-  const where = useMode ? 'WHERE mode = $1' : '';
-  const lim = useMode ? '$2' : '$1';
-  const { rows } = await query(
-    `SELECT r.handle, p.emoji, r.mode, r.score, r.max_score, r.accuracy,
-            r.duration_ms, r.created_at
-     FROM runs r LEFT JOIN players p ON p.id = r.player_id
-     ${where}
-     ORDER BY r.score DESC, r.accuracy DESC, r.duration_ms ASC
-     LIMIT ${lim}`,
-    params
+    `SELECT handle, emoji, answered, correct
+       FROM players
+      WHERE answered > 0
+      ORDER BY answered DESC, correct DESC, last_seen ASC
+      LIMIT $1`,
+    [limit]
   );
   return rows;
 }
 
-export async function topChips(limit = 20) {
+// ── live FOMO ────────────────────────────────────────────────────────────────
+export async function liveStats() {
+  const { rows } = await query(`
+    SELECT
+      (SELECT count(*)::int FROM players WHERE last_seen > now() - interval '3 minutes') AS grinding,
+      (SELECT COALESCE(sum(answered), 0)::bigint FROM players) AS total_answered,
+      (SELECT count(*)::int FROM players) AS players
+  `);
+  return rows[0];
+}
+
+export async function addAnnouncement(handle, emoji, milestone) {
   const { rows } = await query(
-    `SELECT handle, emoji, chips FROM players ORDER BY chips DESC, last_seen DESC LIMIT $1`,
-    [limit]
+    `INSERT INTO announcements (handle, emoji, milestone) VALUES ($1,$2,$3) RETURNING id`,
+    [handle, emoji, milestone]
+  );
+  return rows[0].id;
+}
+
+export async function getAnnouncements(sinceId = 0, limit = 15) {
+  const { rows } = await query(
+    `SELECT id, handle, emoji, milestone, created_at
+       FROM announcements
+      WHERE id > $1
+      ORDER BY id DESC
+      LIMIT $2`,
+    [sinceId, limit]
   );
   return rows;
 }

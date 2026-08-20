@@ -1,81 +1,81 @@
-# 🎰 CRAM ROYALE — Data-Driven Wagers
+# ▚ CRAM // S07 — DDW question grinder
 
-A cyberpunk casino mock-exam for the **DDW 10.020** final. Answer real mock questions,
-wager imaginary chips on your confidence, and climb the leaderboard. The house — and
-the exam — always wins. Probably.
+A HUD/FUI-styled practice tool for the **DDW 10.020** final. Put your name in, then
+grind questions. It's practice — right or wrong doesn't matter, reps do.
 
-Built for a friend who's revising. The gambling is a joke. The questions are not.
+Built for friends who are revising. The humour is a joke. The questions are not.
 
-## Features
+## What it does
 
-- **71 questions** in the real exam formats — multi-select (with the true −50%/wrong-pick
+- **START GRIND** (the main mode) — an endless question grinder pulled from the real
+  mock **plus** a bank of predicted questions (71 total). Every answer bumps your count
+  on the **leaderboard**, which ranks purely by *volume answered* — correctness doesn't
+  affect your rank, because it's practice.
+- **MOCK PAPER** (side mode) — the real mock paper in order. No leaderboard, just a
+  score summary at the end.
+- **Live FOMO** — when anyone hits a milestone (10, then every 25) a global
+  announcement fires: *"stef just hit 50 questions"*. Plus a live "N grinding now".
+- **GUESS ODDS** — before you answer, it computes your odds of getting it right by
+  *pure guessing* (e.g. 4 multi-select options → 1-in-16) with a snarky verdict. It's
+  comedy, not advice.
+- **Get it wrong → it explains why.** That's the actual point.
+- Every question format the exam uses: multi-select (with the true −50%/wrong-pick
   penalty), dropdown fill-in-the-blank, numeric (tolerance-checked), matching, jumbled
-  ordering, and MCQ.
-  - **📝 Mock Exam** — the 21 real mock-final questions, in order, chains intact.
-  - **🔮 Predicted Paper** — 50 similar/potential questions mined from the practice bank.
-  - **🎲 Full Degen Run** — everything, shuffled.
-  - **⚡ Concept Blitz** — multi-select only.
-- **The casino** — every question shows a satirical "EXAM ODDS" gauge and a payout
-  multiplier. Wager chips; a perfect answer pays out, a wrong one takes your stake.
-  Two leaderboards: **Top Score** and **High Rollers** (chips).
-- **Cyberpunk UI** — neon glass, glitch title, animated grid floor, procedural
-  synthwave soundtrack + SFX (all generated with the Web Audio API — no asset files).
-- **Easter eggs** — Konami-code HOUSE MODE, jackpot streaks, random rugpulls, a
-  bankruptcy loan-shark, a troll "buy a hint" button, achievements, secret aliases
-  (try `sigmoid`), and themed loading quips.
-- **PostgreSQL** for questions, players, runs, and leaderboards. Answers are graded
-  **server-side** and never sent to the client until you answer.
+  ordering, MCQ. Answers are graded **server-side** and never shipped to the client.
+
+## Look & feel
+
+Light HUD / FUI aesthetic — mono + red accent, corner brackets, registration marks,
+technical labels, industrial type (Chakra Petch / Share Tech Mono). SFX only, no music.
+Fully responsive.
 
 ## Stack
 
-Node + Express · PostgreSQL (`pg`) · vanilla-JS frontend (no build step) · deploys to
-Railway with Nixpacks.
+Node + Express · PostgreSQL (`pg`) · vanilla-JS frontend (no build step) · Nixpacks → Railway.
 
 ## Run locally
 
-You need a PostgreSQL database. The quickest way is Docker:
+Needs PostgreSQL. Quickest way is Docker:
 
 ```bash
 docker run -d --name cram_pg -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=cram_royale \
   -p 5433:5432 postgres:16-alpine
 
-# then, in this folder:
 npm install
 export DATABASE_URL="postgres://postgres:postgres@localhost:5433/cram_royale"   # PowerShell: $env:DATABASE_URL="..."
 npm run seed      # loads the 71 questions (also runs automatically on first boot)
 npm start         # → http://localhost:3000
 ```
 
-The app seeds its own schema + questions on boot, so once `DATABASE_URL` is present it
-just works. Two ways to deploy:
+## Deploy to Railway
+
+The app creates its schema + seeds its questions on boot, so once `DATABASE_URL` is
+present it just works.
 
 ### Option A — Dashboard, from the private repo (recommended)
 
 1. [railway.app](https://railway.app) → **New Project → Deploy from GitHub repo** → pick
    `cram-royale`. Railway auto-detects Node (Nixpacks) and runs `npm start`.
-2. In the project, **+ New → Database → PostgreSQL**.
+2. **+ New → Database → PostgreSQL**.
 3. Open the **app service → Variables → New Variable** and add a *reference*:
    `DATABASE_URL = ${{Postgres.DATABASE_URL}}` (Railway autocompletes the `${{ … }}`).
-4. It redeploys, seeds the 71 questions on boot, and gives you a public domain under
-   **Settings → Networking → Generate Domain**.
+4. It redeploys, seeds on boot, and you can **Generate Domain** under Settings → Networking.
 
-This path also auto-deploys on every `git push`.
+Auto-deploys on every `git push`.
 
 ### Option B — CLI
 
 ```bash
 railway login                     # opens a browser (one-time)
-railway init --name cram-royale   # create a project
-railway add --database postgres   # provision Postgres
-railway up --detach               # build & deploy the app service
-# wire the DB into the app service (Railway does NOT auto-link across services):
-railway variables --set "DATABASE_URL=\${{Postgres.DATABASE_URL}}"
-railway domain                    # get a public URL
+railway init --name cram-royale
+railway add --database postgres
+railway up --detach
+railway variables --set "DATABASE_URL=\${{Postgres.DATABASE_URL}}"   # NOT auto-linked across services
+railway domain
 ```
 
-> ⚠️ Railway does **not** auto-inject `DATABASE_URL` into the app service — you must add
-> the reference variable (step A3 / the `railway variables` line). If you point the app
-> at Railway's **public** proxy URL instead of the private one, also set `DATABASE_SSL=true`.
+> ⚠️ Railway does **not** auto-inject `DATABASE_URL` into the app service — add the
+> reference variable. Set `DATABASE_SSL=true` only if you use the public proxy URL.
 >
 > 💸 Railway bills for usage. Deploy when you're ready.
 
@@ -83,10 +83,10 @@ railway domain                    # get a public URL
 
 | var | required | notes |
 |-----|----------|-------|
-| `DATABASE_URL` | yes | Postgres connection string (Railway injects this). |
+| `DATABASE_URL` | yes | Postgres connection string (Railway injects this via the reference var). |
 | `PORT` | no | defaults to 3000; Railway sets it automatically. |
-| `DATABASE_SSL` | no | set `true` only for SSL-required (public proxy) connections. |
+| `DATABASE_SSL` | no | `true` only for SSL-required (public proxy) connections. |
 
 ---
 
-*chips are imaginary · your exam is not · study anyway*
+*it's practice. right or wrong doesn't matter. only the grind counts.*

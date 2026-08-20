@@ -1,7 +1,7 @@
 {
   "name": "cram-royale",
-  "version": "1.0.0",
-  "description": "CRAM ROYALE — a cyberpunk casino mock-exam for DDW 10.020 finals. Bet your GPA.",
+  "version": "2.0.0",
+  "description": "CRAM // S07 — a HUD-styled question grinder for the DDW 10.020 final.",
   "type": "module",
   "main": "server.js",
   "scripts": {

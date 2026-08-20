@@ -1,496 +1,348 @@
-// CRAM ROYALE — main app orchestrator.
+// CRAM // S07 — app orchestrator.
 import { API } from './api.js';
 import { Audio } from './audio.js';
 import { renderWidget, md } from './render.js';
-import {
-  confetti, chipRain, glitch, onKonami, Achievements, ACHIEVEMENTS,
-  randomLoader, oddsQuip,
-} from './eggs.js';
+import { burst, glitch, onKonami, randomLoader, guessOdds } from './eggs.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const fmt = (n) => Number(n).toLocaleString('en-US');
 
-const MODE_META = {
-  mock: { label: '📝 Mock Exam', blurb: 'The 21 real mock-final questions. The genuine article.' },
-  predicted: { label: '🔮 Predicted Paper', blurb: 'Similar questions the AI thinks they might ask. Fresh drills.' },
-  all: { label: '🎲 Full Degen Run', blurb: 'Everything, shuffled. Maximum chaos, maximum chips.' },
-  blitz: { label: '⚡ Concept Blitz', blurb: 'Multi-select only. Fast money, brutal penalties.' },
-};
+const MILESTONES_HINT = 'right or wrong, it counts. next milestone incoming.';
 
 const state = {
   player: null,
-  mode: 'mock',
-  questions: [],
-  index: 0,
-  houseMode: false,
-  run: null,
-  current: null, // active widget controller
+  mode: 'grind',
+  queue: [],
+  mockList: [],
+  mockIdx: 0,
+  current: null,
+  currentQ: null,
   answered: false,
+  mock: null,
+  lastAnnId: null,   // null = uninitialised (first poll seeds it silently)
 };
 
-// ── boot ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', init);
 
 function init() {
-  wireHud();
-  wireLogin();
-  wireModes();
-  wireExam();
-  wireResults();
-  wireLeaderboard();
+  // first pointer starts the audio context (autoplay policy)
+  addEventListener('pointerdown', () => Audio.init(), { once: true });
 
-  onKonami(activateHouseMode);
+  wireHome();
+  wirePlay();
+  wireBoard();
+  wireStatic();
+  onKonami(() => { document.body.classList.toggle('crt'); glitch(500); });
 
-  // any first click starts the audio engine (autoplay policy)
-  const kick = () => { Audio.init(); updateSoundBtns(); removeEventListener('pointerdown', kick); };
-  addEventListener('pointerdown', kick, { once: true });
+  const saved = localStorage.getItem('cram_name');
+  if (saved) $('#name-input').value = saved;
 
-  // auto-login returning players
-  const saved = localStorage.getItem('cram_handle');
-  const savedEmoji = localStorage.getItem('cram_emoji') || '🎰';
-  if (saved) { $('#handle-input').value = saved; $('#emoji-input').value = savedEmoji; }
+  // live feed polling (runs everywhere)
+  refreshLive(); setInterval(refreshLive, 15000);
+  pollAnnouncements(true); setInterval(() => pollAnnouncements(false), 9000);
 
-  renderAchievementsGrid();
-  show('login');
+  show('home');
 }
 
-// ── screen switching ─────────────────────────────────────────────────────────
 function show(name) {
   $$('.screen').forEach((s) => s.classList.toggle('active', s.id === `screen-${name}`));
-  $('#hud').classList.toggle('hidden', name === 'login');
   window.scrollTo(0, 0);
 }
 
-// ── HUD (persistent top bar) ─────────────────────────────────────────────────
-function wireHud() {
-  $('#btn-music').addEventListener('click', () => { Audio.init(); Audio.toggleMusic(); updateSoundBtns(); });
-  $('#btn-sfx').addEventListener('click', () => { Audio.init(); Audio.toggleSfx(); updateSoundBtns(); });
-  $('#btn-home').addEventListener('click', () => { Audio.click(); if (confirm('Bail on this run and return to the lobby?')) show('modes'); });
-  $('#btn-leaderboard-hud').addEventListener('click', () => { Audio.click(); openLeaderboard(); });
-}
-function updateSoundBtns() {
-  $('#btn-music').textContent = Audio.isMusicOn ? '🎵' : '🔇';
-  $('#btn-sfx').textContent = Audio.isSfxOn ? '🔊' : '🔈';
-  $('#btn-music').classList.toggle('off', !Audio.isMusicOn);
-  $('#btn-sfx').classList.toggle('off', !Audio.isSfxOn);
-}
-function setChips(n) {
-  state.player.chips = Number(n);
-  const el = $('#hud-chips');
-  el.textContent = `🪙 ${fmt(state.player.chips)}`;
-  el.classList.remove('flash-up', 'flash-down'); void el.offsetWidth;
-}
-function fmt(n) { return Number(n).toLocaleString('en-US'); }
-
-// ── login ────────────────────────────────────────────────────────────────────
-function wireLogin() {
-  $$('.emoji-pick').forEach((b) => b.addEventListener('click', () => {
-    $('#emoji-input').value = b.textContent; Audio.click();
-    $$('.emoji-pick').forEach((x) => x.classList.remove('sel')); b.classList.add('sel');
-  }));
-  $('#login-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    Audio.init(); Audio.lockin();
-    const handle = $('#handle-input').value.trim();
-    const emoji = $('#emoji-input').value.trim() || '🎰';
-    if (!handle) return;
-    checkSecretHandle(handle);
-    try {
-      const p = await API.player(handle, emoji);
-      state.player = p;
-      localStorage.setItem('cram_handle', p.handle);
-      localStorage.setItem('cram_emoji', p.emoji);
-      setChips(p.chips);
-      $('#modes-greeting').innerHTML = `Welcome, <b>${p.emoji} ${escapeHtml(p.handle)}</b>. You\'re holding <b>🪙 ${fmt(p.chips)}</b>.`;
-      confetti(60);
-      show('modes');
-    } catch (err) { alert('Could not start: ' + err.message); }
+// ── home ─────────────────────────────────────────────────────────────────────
+function wireHome() {
+  $$('#screen-home .hud-btn').forEach((b) => {
+    b.addEventListener('mouseenter', () => Audio.hover());
+    b.addEventListener('click', () => onMenu(b.dataset.action));
   });
-  $('#btn-view-lb-login').addEventListener('click', () => { Audio.click(); openLeaderboard(); });
-}
-function checkSecretHandle(h) {
-  const k = h.toLowerCase();
-  const eggs = {
-    sigmoid: () => { confetti(150); banner('σ THE SIGMOID APPROVES σ'); },
-    house: activateHouseMode, thehouse: activateHouseMode,
-    allin: () => banner('🎲 born to gamble'),
-    ddw: () => banner('📊 Data-Driven Wagers™'),
-    neo: () => { glitch(800); banner('there is no spoon (only β)'); },
-  };
-  if (eggs[k]) setTimeout(eggs[k], 300);
+  $('#name-form').addEventListener('submit', (e) => { e.preventDefault(); onMenu('grind'); });
 }
 
-// ── modes ────────────────────────────────────────────────────────────────────
-function wireModes() {
-  $$('.mode-card').forEach((c) => {
-    c.addEventListener('mouseenter', () => Audio.hover());
-    c.addEventListener('click', () => { Audio.deal(); startRun(c.dataset.mode); });
-  });
-  $('#btn-modes-lb').addEventListener('click', () => { Audio.click(); openLeaderboard(); });
-  $('#btn-achievements').addEventListener('click', () => { Audio.click(); $('#achv-modal').classList.add('open'); renderAchievementsGrid(); });
-  $('#achv-close').addEventListener('click', () => { Audio.click(); $('#achv-modal').classList.remove('open'); });
-}
-
-async function startRun(mode) {
-  state.mode = mode;
-  $('#loader-text').textContent = randomLoader();
-  $('#loader').classList.add('show');
-  try {
-    const { questions } = await API.questions(mode);
-    if (!questions.length) throw new Error('no questions for this mode');
-    state.questions = questions;
-    state.index = 0;
-    state.run = {
-      score: 0, maxScore: questions.reduce((a, q) => a + Number(q.points), 0),
-      correct: 0, total: questions.length, chipsDelta: 0, streak: 0,
-      startTime: Date.now(), answers: [], buyAttempts: 0,
-    };
-    setTimeout(() => { $('#loader').classList.remove('show'); show('exam'); renderQuestion(); }, 650);
-  } catch (err) {
-    $('#loader').classList.remove('show');
-    alert('Could not load: ' + err.message);
+async function ensurePlayer() {
+  const name = $('#name-input').value.trim();
+  if (!name) {
+    const f = $('#name-input');
+    f.focus(); f.classList.remove('shake'); void f.offsetWidth; f.classList.add('shake');
+    Audio.wrong();
+    return null;
   }
+  if (state.player && state.player.handle.toLowerCase() === name.toLowerCase()) return state.player;
+  const p = await API.player(name).catch((e) => { alert(e.message); return null; });
+  if (p) { state.player = p; localStorage.setItem('cram_name', p.handle); }
+  return p;
 }
 
-// ── exam screen ──────────────────────────────────────────────────────────────
-function wireExam() {
-  $('#wager-slider').addEventListener('input', onWagerChange);
-  $$('.wager-quick').forEach((b) => b.addEventListener('click', () => {
-    Audio.click();
-    const v = b.dataset.amt;
-    const max = maxWager();
-    $('#wager-slider').value = v === 'max' ? max : Math.min(Number(v), max);
-    onWagerChange();
-    if (v === 'max' && max > 0) Achievements.unlock('all_in');
-  }));
-  $('#btn-lockin').addEventListener('click', submitAnswer);
-  $('#btn-buy').addEventListener('click', buyAnswer);
-  // #btn-next lives inside the dynamically-rendered result panel; it is wired
-  // in applyResult() each time the panel is built.
+async function onMenu(action) {
+  Audio.click();
+  if (action === 'leaderboard') return openBoard();
+  if (action === 'info') return show('info');
+  const p = await ensurePlayer();
+  if (!p) return;
+  if (action === 'grind') startGrind();
+  if (action === 'mock') startMock();
 }
 
-function maxWager() { return Math.max(0, Math.min(Number(state.player.chips), 100000)); }
+// ── loaders ──────────────────────────────────────────────────────────────────
+function showLoader() { $('#loader-text').textContent = randomLoader(); $('#loader').classList.add('show'); }
+function hideLoader() { $('#loader').classList.remove('show'); }
 
-function renderQuestion() {
+// ── grind ────────────────────────────────────────────────────────────────────
+async function startGrind() {
+  state.mode = 'grind'; showLoader();
+  try {
+    const { questions } = await API.questions('grind');
+    if (!questions.length) throw new Error('no questions');
+    state.pool = questions;
+    state.queue = shuffle(questions);
+    $('#play-mode').textContent = 'GRIND';
+    setTimeout(() => { hideLoader(); show('play'); nextGrind(); }, 500);
+  } catch (e) { hideLoader(); alert('could not load: ' + e.message); }
+}
+function nextGrind() {
+  if (!state.queue.length) state.queue = shuffle(state.pool);
+  renderQuestion(state.queue.shift());
+}
+
+// ── mock ─────────────────────────────────────────────────────────────────────
+async function startMock() {
+  state.mode = 'mock'; showLoader();
+  try {
+    const { questions } = await API.questions('mock');
+    if (!questions.length) throw new Error('no mock questions');
+    state.mockList = questions; state.mockIdx = 0;
+    state.mock = { score: 0, max: questions.reduce((a, q) => a + Number(q.points), 0), correct: 0, total: questions.length };
+    $('#play-mode').textContent = 'MOCK';
+    setTimeout(() => { hideLoader(); show('play'); renderQuestion(state.mockList[0]); }, 500);
+  } catch (e) { hideLoader(); alert('could not load: ' + e.message); }
+}
+
+// ── render a question ────────────────────────────────────────────────────────
+function renderQuestion(q) {
   state.answered = false;
-  // reset panels FIRST so a stale result from the previous question can never
-  // flash under a freshly-rendered question
-  const rp = $('#result-panel');
-  rp.classList.add('hidden'); rp.innerHTML = '';
-  $('#wager-panel').classList.remove('hidden');
+  state.currentQ = q;
 
-  const q = state.questions[state.index];
-  state.current = renderWidget(q, () => {});
-  Audio.deal();
+  const rp = $('#result-panel'); rp.classList.add('hidden'); rp.innerHTML = '';
+  $('#odds-panel').classList.remove('hidden');
+  $('#btn-confirm').classList.remove('hidden');
+  $('#btn-confirm').disabled = false;
+
+  // top bar
+  if (state.mode === 'grind') {
+    $('#play-counter').textContent = `ANSWERED · ${fmt(state.player.answered || 0)}`;
+    $('#play-progressbar').style.width = `${(((state.player.answered || 0) % 25) / 25) * 100}%`;
+  } else {
+    $('#play-counter').textContent = `Q ${state.mockIdx + 1} / ${state.mockList.length}`;
+    $('#play-progressbar').style.width = `${(state.mockIdx / state.mockList.length) * 100}%`;
+  }
 
   // header
-  const partName = ['', 'PART 1', 'PART 2', 'PART 3'][q.part] || '';
-  $('#q-progress').textContent = `Q${state.index + 1} / ${state.questions.length}`;
-  $('#q-part').textContent = partName;
+  $('#q-id').textContent = String(q.seq).padStart(3, '0');
   $('#q-topic').textContent = q.topic;
-  $('#q-points').textContent = `${q.points} pt${Number(q.points) === 1 ? '' : 's'}`;
-  $('#q-source').textContent = q.source === 'mock' ? '★ REAL MOCK' : '🔮 PREDICTED';
-  $('#q-source').className = 'q-source ' + (q.source === 'mock' ? 'real' : 'pred');
-  const pct = ((state.index) / state.questions.length) * 100;
-  $('#exam-progressbar').style.width = `${pct}%`;
+  $('#q-points').textContent = `${q.points} PT${Number(q.points) === 1 ? '' : 'S'}`;
+  const src = $('#q-source');
+  src.textContent = q.source === 'mock' ? 'MOCK' : 'PREDICTED';
+  src.className = 'q-source ' + (q.source === 'mock' ? 'mock' : '');
 
   // body
+  state.current = renderWidget(q, () => {});
   const body = $('#q-body'); body.innerHTML = '';
   body.append(el('div', 'q-stem', md(q.stem)));
-  // The dropdowns widget renders q.code itself (with inline <select>s) when the
-  // code carries ⟨blank⟩ markers — don't also render a static copy.
   const widgetOwnsCode = q.type === 'dropdowns' && q.code && /⟨/.test(q.code);
-  if (q.code && !widgetOwnsCode) body.append(elPre(q.code));
+  if (q.code && !widgetOwnsCode) { const pre = document.createElement('pre'); pre.className = 'md-pre'; pre.textContent = q.code; body.append(pre); }
   body.append(state.current.el);
-  if (state.current.focus) setTimeout(() => state.current.focus(), 50);
+  if (state.current.focus) setTimeout(() => state.current.focus(), 40);
 
-  // gambling panel
-  const odds = state.houseMode ? 100 : Number(q.exam_odds);
-  $('#odds-value').textContent = `${odds}%`;
-  $('#odds-fill').style.width = `${odds}%`;
-  $('#odds-quip').textContent = state.houseMode ? 'HOUSE MODE: the fix is in' : oddsQuip(Number(q.exam_odds));
-  $('#mult-value').textContent = `${q.multiplier.toFixed(2)}×`;
+  // guess odds
+  const o = guessOdds(q);
+  $('#odds-value').textContent = o.label;
+  $('#odds-kind').textContent = o.kind;
+  $('#odds-verdict').textContent = o.verdict;
+  $('#odds-note').textContent = o.note;
 
-  const slider = $('#wager-slider');
-  slider.max = maxWager(); slider.value = Math.min(50, maxWager());
-  onWagerChange();
-
-  // reset panels
-  $('#wager-panel').classList.remove('hidden');
-  $('#result-panel').classList.add('hidden');
-  $('#btn-lockin').disabled = false;
-  $('#btn-buy').disabled = false;
-  $('#buy-cost').textContent = fmt(buyCost());
+  Audio.next();
 }
 
-function onWagerChange() {
-  const w = Number($('#wager-slider').value);
-  const q = state.questions[state.index];
-  const win = Math.round(w * (q.multiplier - 1));
-  $('#wager-amount').textContent = fmt(w);
-  $('#wager-win').textContent = `+${fmt(win)}`;
-  $('#wager-lose').textContent = `-${fmt(w)}`;
-}
-
-async function submitAnswer() {
+// ── confirm / grade ──────────────────────────────────────────────────────────
+async function confirmAnswer() {
   if (state.answered) return;
-  const q = state.questions[state.index];
+  const q = state.currentQ;
   const response = state.current.getResponse();
-  if (response == null || (Array.isArray(response) && response.length === 0) ||
-      (typeof response === 'object' && !Array.isArray(response) && Object.values(response).every((v) => !v))) {
-    if (!confirm('You haven\'t answered. Lock in a blank (and lose your wager if you bet)?')) return;
-  }
-  state.answered = true;
-  const wager = Number($('#wager-slider').value);
-  if (wager >= maxWager() && wager > 0) Achievements.unlock('all_in');
-  $('#btn-lockin').disabled = true; $('#btn-buy').disabled = true;
-  Audio.lockin();
+  const blank = response == null ||
+    (Array.isArray(response) && response.length === 0) ||
+    (typeof response === 'object' && !Array.isArray(response) && Object.values(response).every((v) => !v));
+  if (blank && !confirm('nothing selected — lock in a blank answer?')) return;
 
+  state.answered = true;
+  $('#btn-confirm').disabled = true;
+  Audio.select();
   try {
-    const res = await API.check({
-      questionId: q.id, response, handle: state.player.handle,
-      wager, streak: state.run.streak,
-    });
-    applyResult(q, res, wager);
-  } catch (err) {
-    state.answered = false; $('#btn-lockin').disabled = false;
-    alert('Check failed: ' + err.message);
-  }
+    const res = await API.check({ questionId: q.id, response, handle: state.player.handle, mode: state.mode });
+    applyResult(q, res);
+  } catch (e) { state.answered = false; $('#btn-confirm').disabled = false; alert('check failed: ' + e.message); }
 }
 
-function applyResult(q, res, wager) {
+function applyResult(q, res) {
   state.current.lock();
   state.current.reveal(res.correctAnswer, state.current.getResponse());
+  $('#btn-confirm').classList.add('hidden');
+  $('#odds-panel').classList.add('hidden');
 
-  // scoring
-  state.run.score += res.pointsAwarded;
-  if (res.correct) { state.run.correct++; state.run.streak++; } else { state.run.streak = 0; }
-  if (res.newBalance != null) {
-    const delta = Number(res.newBalance) - Number(state.player.chips);
-    state.run.chipsDelta += delta;
-    animateChips(Number(state.player.chips), Number(res.newBalance));
-  }
-
-  // achievements
-  if (res.correct) Achievements.unlock('first_blood');
-  if (res.chipsDelta >= 500) Achievements.unlock('high_roller');
-  if (res.jackpot) Achievements.unlock('jackpot');
-  if (res.rugpull) Achievements.unlock('rugged');
-
-  // sfx + fx
-  if (res.rugpull) { glitch(700); Audio.rugpull(); }
-  else if (res.jackpot) { confetti(160); chipRain(50); Audio.jackpot(); }
-  else if (res.correct) { Audio.correct(); if (res.chipsDelta > 0) Audio.coin(); confetti(40); }
-  else { Audio.wrong(); }
-
-  // result card
-  const rp = $('#result-panel');
   const verdict = res.correct ? 'CORRECT' : (res.fraction > 0 ? 'PARTIAL' : 'WRONG');
   const vclass = res.correct ? 'v-correct' : (res.fraction > 0 ? 'v-partial' : 'v-wrong');
-  const chipsLine = res.chipsDelta === 0 ? 'No wager placed.'
-    : res.chipsDelta > 0 ? `<span class="up">🪙 +${fmt(res.chipsDelta)} chips</span>`
-    : `<span class="down">🪙 ${fmt(res.chipsDelta)} chips</span>`;
-  const flags = [
-    res.jackpot ? '<span class="flag jackpot">🎰 JACKPOT STREAK</span>' : '',
-    res.rugpull ? '<span class="flag rug">📉 RUGPULLED — the house took half</span>' : '',
-  ].join('');
+  // Explanation shown when NOT fully correct (the point of the grinder), plus a
+  // small "why" toggle when correct.
+  const showExplain = !res.correct;
+  const last = state.mode === 'mock' ? state.mockIdx + 1 >= state.mockList.length : false;
+  const nextLabel = state.mode === 'mock' ? (last ? 'SEE RESULTS' : 'NEXT') : 'NEXT';
+
+  const rp = $('#result-panel');
   rp.innerHTML = `
     <div class="verdict ${vclass}">${verdict}</div>
-    <div class="result-line">+${res.pointsAwarded} / ${q.points} pts &nbsp;·&nbsp; ${chipsLine}</div>
-    ${flags ? `<div class="flags">${flags}</div>` : ''}
-    <div class="explanation">${md(res.explanation)}</div>
-    <button id="btn-next" class="btn btn-next">${state.index + 1 < state.questions.length ? 'NEXT ▶' : 'SEE RESULTS ▶'}</button>
+    <div class="result-line">${res.pointsAwarded} / ${q.points} pts${state.mode === 'grind' && res.answered != null ? ` · answered ${fmt(res.answered)}` : ''}</div>
+    ${showExplain ? `<div class="explanation">${md(res.explanation)}</div>`
+                  : `<button id="why-btn" class="mini-btn" style="margin-bottom:12px">WHY? ▾</button><div id="why-box" class="explanation" style="display:none">${md(res.explanation)}</div>`}
+    <button id="btn-next" class="hud-btn primary"><span class="btn-bar"></span><span class="btn-label">${nextLabel}</span><span class="btn-arrow">▶</span></button>
   `;
-  $('#wager-panel').classList.add('hidden');
   rp.classList.remove('hidden');
-  $('#btn-next').addEventListener('click', nextQuestion);
-  $('#exam-progressbar').style.width = `${((state.index + 1) / state.questions.length) * 100}%`;
+  $('#btn-next').addEventListener('click', goNext);
+  const why = $('#why-btn');
+  if (why) why.addEventListener('click', () => { const b = $('#why-box'); const open = b.style.display !== 'none'; b.style.display = open ? 'none' : 'block'; why.textContent = open ? 'WHY? ▾' : 'WHY? ▴'; Audio.click(); });
 
-  state.run.answers.push({ id: q.id, correct: res.correct, points: res.pointsAwarded, wager, payout: res.chipsDelta });
+  // sfx
+  if (res.correct) Audio.correct(); else Audio.wrong();
 
-  // bankruptcy check
-  if (Number(state.player.chips) <= 0) setTimeout(loanShark, 900);
-}
-
-function animateChips(from, to) {
-  setChips(to);
-  const el = $('#hud-chips');
-  el.classList.add(to >= from ? 'flash-up' : 'flash-down');
-}
-
-function nextQuestion() {
-  Audio.click();
-  if (state.index + 1 < state.questions.length) { state.index++; renderQuestion(); }
-  else finishRun();
-}
-
-// ── buy-the-answer (troll) ───────────────────────────────────────────────────
-function buyCost() { return 150 + state.run.buyAttempts * 150; }
-async function buyAnswer() {
-  if (state.answered) return;
-  Achievements.unlock('buyer');
-  const cost = buyCost();
-  if (Number(state.player.chips) < cost) { banner('💸 you\'re too broke to cheat'); Audio.wrong(); return; }
-  if (!confirm(`Buy a hint for 🪙 ${fmt(cost)} chips? (No refunds. The house has… a sense of humour.)`)) return;
-  state.run.buyAttempts++;
-  Audio.deal();
-  const nb = await API.chips(state.player.handle, -cost).then((r) => r.newBalance).catch(() => null);
-  if (nb != null) { animateChips(Number(state.player.chips), Number(nb)); state.run.chipsDelta -= cost; }
-  const trolls = [
-    'The answer was inside you all along. 🫶',
-    'Hint: it\'s one of the options. Probably.',
-    'Our records indicate you should have studied. 📚',
-    'ERROR 402: knowledge requires payment we cannot provide.',
-    'The house has taken your chips and wishes you luck. 🎩',
-    'Hint purchased. Hint value: emotional damage.',
-  ];
-  // 1-in-4 it actually helps a little
-  if (Math.random() < 0.25) {
-    banner('🕳️ …fine. It\'s NOT the most "obvious" option.');
-  } else {
-    banner('🕳️ ' + trolls[Math.floor(Math.random() * trolls.length)]);
+  // grind bookkeeping
+  if (state.mode === 'grind') {
+    if (res.answered != null) {
+      state.player.answered = res.answered;
+      $('#play-counter').textContent = `ANSWERED · ${fmt(res.answered)}`;
+      $('#play-progressbar').style.width = `${((res.answered % 25) / 25) * 100}%`;
+    }
+    if (res.milestone) celebrateMilestone(res.milestone);
   }
-  $('#buy-cost').textContent = fmt(buyCost());
+  // mock bookkeeping
+  if (state.mode === 'mock') {
+    state.mock.score += res.pointsAwarded;
+    if (res.correct) state.mock.correct++;
+  }
 }
 
-// ── loan shark (bankruptcy) ──────────────────────────────────────────────────
-function loanShark() {
-  Achievements.unlock('degenerate');
-  glitch(500);
-  const m = $('#shark-modal');
-  m.classList.add('open');
-  $('#shark-yes').onclick = async () => {
-    Audio.coin(); m.classList.remove('open');
-    const r = await API.bailout(state.player.handle).catch(() => null);
-    if (r?.newBalance != null) { animateChips(Number(state.player.chips), Number(r.newBalance)); banner('🦈 "Pleasure doing business." +250 chips'); }
-  };
-  $('#shark-no').onclick = () => { Audio.click(); m.classList.remove('open'); banner('🪙 broke and proud'); };
+function goNext() {
+  Audio.click();
+  if (state.mode === 'grind') return nextGrind();
+  if (state.mockIdx + 1 < state.mockList.length) { state.mockIdx++; renderQuestion(state.mockList[state.mockIdx]); }
+  else finishMock();
 }
 
-// ── results ──────────────────────────────────────────────────────────────────
-async function finishRun() {
-  const r = state.run;
-  const acc = r.total ? r.correct / r.total : 0;
-  const durationMs = Date.now() - r.startTime;
-
-  // end-of-run achievements
-  if (acc >= 0.9) Achievements.unlock('actuary');
-  if (r.score >= 40) Achievements.unlock('scholar');
-  if (state.mode === 'all') Achievements.unlock('full_send');
-  if (Number(state.player.chips) === 0) Achievements.unlock('no_ragrets');
-
-  $('#res-score').textContent = `${r.score.toFixed(r.score % 1 ? 1 : 0)} / ${r.maxScore}`;
-  $('#res-pct').textContent = `${Math.round((r.score / (r.maxScore || 1)) * 100)}%`;
-  $('#res-correct').textContent = `${r.correct} / ${r.total}`;
-  $('#res-acc').textContent = `${Math.round(acc * 100)}%`;
-  $('#res-chips').textContent = `${r.chipsDelta >= 0 ? '+' : ''}${fmt(r.chipsDelta)}`;
-  $('#res-chips').className = 'res-big ' + (r.chipsDelta >= 0 ? 'up' : 'down');
-  $('#res-balance').textContent = `🪙 ${fmt(state.player.chips)}`;
-  $('#res-grade').textContent = gradeFor(r.score / (r.maxScore || 1));
-  $('#res-msg').textContent = resultMessage(acc, r.chipsDelta);
-
-  if (acc >= 0.7) { confetti(160); Audio.jackpot(); } else { Audio.correct(); }
-
-  show('results');
-
-  // submit to leaderboard
-  try {
-    const sub = await API.run({
-      handle: state.player.handle, mode: state.mode,
-      score: r.score, maxScore: r.maxScore, correctCount: r.correct, totalCount: r.total,
-      chipsDelta: r.chipsDelta, durationMs, accuracy: acc,
-    });
-    $('#res-rank').textContent = sub.rank ? `#${sub.rank} on the ${MODE_META[state.mode].label} board` : 'ranked!';
-  } catch { $('#res-rank').textContent = ''; }
+function celebrateMilestone(n) {
+  burst(120);
+  Audio.milestone();
+  toast(`YOU HIT <span class="who">${n}</span> QUESTIONS ▚ keep grinding`, 'mine');
+  // remember: don't double-toast our own announcement when the poll returns it
+  state._justCelebrated = n;
 }
 
-function gradeFor(f) {
-  if (f >= 0.9) return 'S';
-  if (f >= 0.8) return 'A';
-  if (f >= 0.67) return 'B';
-  if (f >= 0.5) return 'C';
-  if (f >= 0.3) return 'D';
-  return 'F';
-}
-function resultMessage(acc, chips) {
-  if (acc >= 0.9) return 'Dean\'s List behaviour. Friday is yours.';
-  if (acc >= 0.7) return 'Solidly on track. Keep the clock discipline.';
-  if (acc >= 0.5) return 'Passable. Work the error log and run it back.';
-  if (chips > 0) return 'Bad exam, good gambler. Priorities?';
-  return 'The house always wins. So does studying. Run it back.';
-}
-
-function wireResults() {
-  $('#btn-again').addEventListener('click', () => { Audio.click(); show('modes'); });
-  $('#btn-res-lb').addEventListener('click', () => { Audio.click(); openLeaderboard(); });
-  $('#btn-share').addEventListener('click', shareResult);
-}
-function shareResult() {
-  const r = state.run;
-  const txt = `I scored ${r.score}/${r.maxScore} (${Math.round((r.score / (r.maxScore || 1)) * 100)}%) and ${r.chipsDelta >= 0 ? 'won' : 'lost'} ${fmt(Math.abs(r.chipsDelta))} chips on CRAM ROYALE 🎰 #DDW`;
-  navigator.clipboard?.writeText(txt).then(() => banner('📋 copied to clipboard')).catch(() => banner(txt));
-  Audio.coin();
+// ── mock summary ─────────────────────────────────────────────────────────────
+function finishMock() {
+  const m = state.mock;
+  const pct = Math.round((m.score / (m.max || 1)) * 100);
+  $('#sum-score').textContent = `${round1(m.score)} / ${m.max}`;
+  $('#sum-pct').textContent = `${pct}%`;
+  $('#sum-correct').textContent = `${m.correct} / ${m.total}`;
+  $('#sum-msg').textContent = pct >= 70 ? 'sharp. clock discipline on Friday and you\'re set.'
+    : pct >= 50 ? 'passable. now go grind the weak spots.'
+    : 'rough — but it\'s a mock. go grind, it\'s literally free reps.';
+  if (pct >= 70) { burst(120); Audio.milestone(); }
+  show('summary');
 }
 
 // ── leaderboard ──────────────────────────────────────────────────────────────
-function wireLeaderboard() {
-  $('#lb-close').addEventListener('click', () => { Audio.click(); show(state.player ? 'modes' : 'login'); });
-  $$('.lb-tab').forEach((t) => t.addEventListener('click', () => {
-    Audio.click();
-    $$('.lb-tab').forEach((x) => x.classList.remove('active')); t.classList.add('active');
-    loadLeaderboard(t.dataset.board);
-  }));
+let boardTimer = null;
+function wireBoard() {
+  $('#btn-board-refresh').addEventListener('click', () => { Audio.click(); loadBoard(); });
+  $('#btn-board-back').addEventListener('click', () => { Audio.click(); stopBoardTimer(); show('home'); });
 }
-function openLeaderboard() { show('leaderboard'); $$('.lb-tab').forEach((x, i) => x.classList.toggle('active', i === 0)); loadLeaderboard('score'); }
-async function loadLeaderboard(board) {
-  const body = $('#lb-body');
-  body.innerHTML = '<div class="lb-loading">loading the board…</div>';
+function openBoard() { show('board'); loadBoard(); stopBoardTimer(); boardTimer = setInterval(loadBoard, 15000); }
+function stopBoardTimer() { if (boardTimer) { clearInterval(boardTimer); boardTimer = null; } }
+async function loadBoard() {
+  const body = $('#board-body');
+  if (!body.children.length) body.innerHTML = '<div class="board-loading">reading the board…</div>';
   try {
-    const data = board === 'chips'
-      ? await API.leaderboard('chips')
-      : await API.leaderboard('score');
-    if (!data.rows.length) { body.innerHTML = '<div class="lb-loading">No entries yet. Be the first degenerate.</div>'; return; }
-    body.innerHTML = data.rows.map((r, i) => {
+    const { rows } = await API.leaderboard();
+    if (!rows.length) { body.innerHTML = '<div class="board-empty">no grinders yet. be the first — hit START GRIND.</div>'; return; }
+    body.innerHTML = rows.map((r, i) => {
       const me = state.player && r.handle === state.player.handle ? ' me' : '';
-      const medal = ['🥇', '🥈', '🥉'][i] || `${i + 1}`;
-      if (board === 'chips') {
-        return `<div class="lb-row${me}"><span class="lb-rank">${medal}</span><span class="lb-name">${r.emoji || '🎰'} ${escapeHtml(r.handle)}</span><span class="lb-val">🪙 ${fmt(r.chips)}</span></div>`;
-      }
-      return `<div class="lb-row${me}"><span class="lb-rank">${medal}</span><span class="lb-name">${r.emoji || '🎰'} ${escapeHtml(r.handle)}</span><span class="lb-val">${Number(r.score)} pts · ${Math.round(Number(r.accuracy) * 100)}%</span></div>`;
+      const top = i === 0 ? ' top' : '';
+      const rank = ['01', '02', '03'][i] || String(i + 1).padStart(2, '0');
+      const acc = Number(r.answered) ? Math.round((Number(r.correct) / Number(r.answered)) * 100) : 0;
+      return `<div class="board-row${top}${me}"><span class="board-rank">${rank}</span><span class="board-name">${escapeHtml(r.handle)}</span><span class="board-val"><b>${fmt(r.answered)}</b> answered <span class="board-sub2">· ${acc}% acc</span></span></div>`;
     }).join('');
-  } catch (err) { body.innerHTML = `<div class="lb-loading">board offline: ${err.message}</div>`; }
+  } catch (e) { body.innerHTML = `<div class="board-empty">board offline: ${e.message}</div>`; }
 }
 
-// ── HOUSE MODE ───────────────────────────────────────────────────────────────
-function activateHouseMode() {
-  if (state.houseMode) { chipRain(60); return; }
-  state.houseMode = true;
-  Achievements.unlock('house_mode');
-  document.body.classList.add('house-mode');
-  glitch(900); chipRain(80);
-  banner('👁️ HOUSE MODE — the odds were always fake. The chips are real to you.');
-  if (state.questions.length && $('#screen-exam').classList.contains('active')) {
-    $('#odds-value').textContent = '100%'; $('#odds-fill').style.width = '100%';
-    $('#odds-quip').textContent = 'HOUSE MODE: the fix is in';
-  }
+// ── live feed + announcements ────────────────────────────────────────────────
+async function refreshLive() {
+  try {
+    const s = await API.live();
+    const g = `${s.grinding} grinding now`;
+    const t = `${fmt(s.total_answered)} answered all-time`;
+    $('#live-count').textContent = g;
+    $('#live-total').textContent = t;
+    const pl = $('#play-live'); if (pl) pl.textContent = `◢ ${s.grinding} online`;
+  } catch {}
+}
+async function pollAnnouncements(first) {
+  try {
+    const { rows } = await API.announcements(state.lastAnnId ?? 0);
+    if (!rows.length) { if (first && state.lastAnnId == null) state.lastAnnId = 0; return; }
+    const maxId = Math.max(...rows.map((r) => r.id));
+    if (first || state.lastAnnId == null) {
+      state.lastAnnId = maxId;
+      buildTicker(rows);
+      return; // don't spam old milestones on load
+    }
+    // newest last so toasts stack in order
+    rows.slice().reverse().forEach((r) => {
+      if (r.id <= state.lastAnnId) return;
+      const mine = state.player && r.handle === state.player.handle;
+      if (mine && state._justCelebrated === Number(r.milestone)) return; // already celebrated inline
+      toast(`<span class="who">${escapeHtml(r.handle)}</span> just hit <span class="hit">${r.milestone}</span> questions`, mine ? 'mine' : '');
+    });
+    state.lastAnnId = Math.max(state.lastAnnId, maxId);
+    buildTicker(rows);
+  } catch {}
+}
+function buildTicker(rows) {
+  const track = $('#ticker-track');
+  if (!rows || !rows.length) { track.textContent = 'no milestones yet — be the first to hit 10. grind now ▚'; track.classList.remove('scroll'); return; }
+  const parts = rows.slice(0, 10).map((r) => `<span class="who">${escapeHtml(r.handle)}</span> hit <span class="hit">${r.milestone}</span>`);
+  const line = parts.join('  ▚  ') + '  ▚  ';
+  track.innerHTML = line + line; // duplicate for seamless loop
+  track.classList.add('scroll');
 }
 
-// ── achievements grid ────────────────────────────────────────────────────────
-function renderAchievementsGrid() {
-  const grid = $('#achv-grid'); if (!grid) return;
-  const have = Achievements.get();
-  grid.innerHTML = Object.entries(ACHIEVEMENTS).map(([id, a]) => {
-    const got = !!have[id];
-    return `<div class="achv-cell ${got ? 'got' : 'locked'}"><span class="achv-cell-icon">${got ? a.icon : '❔'}</span><b>${got ? a.name : '???'}</b><span>${got ? a.desc : 'locked'}</span></div>`;
-  }).join('');
+// ── static screens ───────────────────────────────────────────────────────────
+function wireStatic() {
+  $('#btn-info-back').addEventListener('click', () => { Audio.click(); show('home'); });
+  $('#btn-sum-grind').addEventListener('click', () => { Audio.click(); startGrind(); });
+  $('#btn-sum-home').addEventListener('click', () => { Audio.click(); show('home'); });
+}
+function wirePlay() {
+  $('#btn-confirm').addEventListener('click', confirmAnswer);
+  $('#btn-exit').addEventListener('click', () => { Audio.click(); if (confirm('leave this run?')) show('home'); });
+  $('#btn-sfx').addEventListener('click', () => { Audio.init(); const on = Audio.toggleSfx(); $('#btn-sfx').textContent = on ? '◧ SFX' : '◨ MUTE'; });
 }
 
-// ── little UI helpers ────────────────────────────────────────────────────────
+// ── helpers ──────────────────────────────────────────────────────────────────
+function shuffle(a) { const r = a.slice(); for (let i = r.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [r[i], r[j]] = [r[j], r[i]]; } return r; }
 function el(tag, cls, html) { const n = document.createElement(tag); if (cls) n.className = cls; if (html != null) n.innerHTML = html; return n; }
-function elPre(text) { const p = document.createElement('pre'); p.className = 'md-pre'; p.textContent = text; return p; }
+function round1(n) { return Number.isInteger(n) ? n : Math.round(n * 10) / 10; }
 function escapeHtml(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
-function banner(text) {
-  const b = document.createElement('div'); b.className = 'banner'; b.textContent = text;
-  document.body.append(b); requestAnimationFrame(() => b.classList.add('show'));
-  setTimeout(() => { b.classList.remove('show'); setTimeout(() => b.remove(), 400); }, 2600);
+function toast(html, cls = '') {
+  const stack = $('#toast-stack');
+  const t = document.createElement('div'); t.className = 'toast ' + cls; t.innerHTML = html;
+  stack.append(t); requestAnimationFrame(() => t.classList.add('show'));
+  setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 400); }, 4600);
+  while (stack.children.length > 4) stack.firstChild.remove();
 }

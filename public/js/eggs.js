@@ -1,7 +1,7 @@
-// Silly features, easter eggs and visual flourishes.
+// Light effects + the guess-odds analyzer. HUD-themed, minimal.
 import { Audio } from './audio.js';
 
-// ── particle canvas (confetti + chip rain) ───────────────────────────────────
+// ── data-burst (monochrome + red, fits the HUD look) ─────────────────────────
 let canvas, cctx, particles = [], raf = null;
 function ensureCanvas() {
   if (canvas) return;
@@ -17,45 +17,32 @@ function tick() {
   particles = particles.filter((p) => p.life > 0);
   for (const p of particles) {
     p.vy += p.g; p.x += p.vx; p.y += p.vy; p.rot += p.vr; p.life--;
-    cctx.save(); cctx.translate(p.x, p.y); cctx.rotate(p.rot); cctx.globalAlpha = Math.min(1, p.life / 30);
-    if (p.emoji) { cctx.font = `${p.size}px serif`; cctx.fillText(p.emoji, 0, 0); }
-    else { cctx.fillStyle = p.color; cctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6); }
+    cctx.save(); cctx.translate(p.x, p.y); cctx.rotate(p.rot);
+    cctx.globalAlpha = Math.min(1, p.life / 26); cctx.fillStyle = p.color;
+    cctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * (p.sq ? 1 : 0.4));
     cctx.restore();
   }
   if (particles.length) raf = requestAnimationFrame(tick);
   else { cancelAnimationFrame(raf); raf = null; }
 }
-const NEON = ['#00f0ff', '#ff2e97', '#b14dff', '#39ff14', '#ffe600'];
-export function confetti(n = 120) {
+const HUD = ['#16171b', '#e2342f', '#9a9b9f', '#ffffff'];
+export function burst(n = 90, x = innerWidth / 2, y = innerHeight / 2) {
   ensureCanvas();
   for (let i = 0; i < n; i++) particles.push({
-    x: innerWidth / 2 + (Math.random() - 0.5) * 200, y: innerHeight / 2,
-    vx: (Math.random() - 0.5) * 16, vy: (Math.random() - 1) * 16 - 4, g: 0.35,
-    rot: Math.random() * 6, vr: (Math.random() - 0.5) * 0.4,
-    size: 6 + Math.random() * 8, color: NEON[i % NEON.length], life: 90 + Math.random() * 40,
-  });
-  if (!raf) tick();
-}
-export function chipRain(n = 40) {
-  ensureCanvas();
-  const chips = ['🪙', '💰', '🎰', '💸'];
-  for (let i = 0; i < n; i++) particles.push({
-    x: Math.random() * innerWidth, y: -30,
-    vx: (Math.random() - 0.5) * 3, vy: 2 + Math.random() * 3, g: 0.06,
-    rot: Math.random() * 6, vr: (Math.random() - 0.5) * 0.2,
-    size: 20 + Math.random() * 16, emoji: chips[i % chips.length], life: 160,
+    x, y, vx: (Math.random() - 0.5) * 15, vy: (Math.random() - 1) * 15 - 3, g: 0.4,
+    rot: Math.random() * 6, vr: (Math.random() - 0.5) * 0.5,
+    size: 4 + Math.random() * 7, color: HUD[i % HUD.length], sq: Math.random() < 0.5, life: 80 + Math.random() * 30,
   });
   if (!raf) tick();
 }
 
 // ── screen glitch ────────────────────────────────────────────────────────────
-export function glitch(ms = 500) {
-  document.body.classList.add('glitching');
-  Audio.glitch();
+export function glitch(ms = 400) {
+  document.body.classList.add('glitching'); Audio.glitch();
   setTimeout(() => document.body.classList.remove('glitching'), ms);
 }
 
-// ── Konami code → HOUSE MODE ─────────────────────────────────────────────────
+// ── Konami → CRT scanline toggle (tiny secret) ───────────────────────────────
 export function onKonami(cb) {
   const seq = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'b', 'a'];
   let i = 0;
@@ -66,60 +53,61 @@ export function onKonami(cb) {
   });
 }
 
-// ── achievements ─────────────────────────────────────────────────────────────
-export const ACHIEVEMENTS = {
-  first_blood: { icon: '🎯', name: 'First Blood', desc: 'Answer your first question correctly.' },
-  high_roller: { icon: '🤑', name: 'High Roller', desc: 'Win 500+ chips on a single question.' },
-  all_in: { icon: '🎲', name: 'All In', desc: 'Go all-in on a wager.' },
-  degenerate: { icon: '💀', name: 'Degenerate', desc: 'Go bankrupt. The house always wins.' },
-  jackpot: { icon: '🎰', name: 'JACKPOT', desc: 'Hit a 3-answer hot streak.' },
-  rugged: { icon: '📉', name: 'Rugged', desc: 'Get rugpulled by the house.' },
-  actuary: { icon: '📊', name: 'The Actuary', desc: 'Finish a run with 90%+ accuracy.' },
-  house_mode: { icon: '👁️', name: 'Behind the Curtain', desc: 'Discover HOUSE MODE.' },
-  full_send: { icon: '🚀', name: 'Full Send', desc: 'Complete a Full Degen Run.' },
-  no_ragrets: { icon: '🔥', name: 'No Ragrets', desc: 'Finish a run with exactly 0 chips.' },
-  scholar: { icon: '🧠', name: 'Dean\'s List', desc: 'Score 40+ points in a single run.' },
-  buyer: { icon: '🕳️', name: 'Buyer Beware', desc: 'Try to buy an answer.' },
-};
-export const Achievements = {
-  key: 'cram_achievements',
-  get() { try { return JSON.parse(localStorage.getItem(this.key)) || {}; } catch { return {}; } },
-  has(id) { return !!this.get()[id]; },
-  unlock(id) {
-    if (this.has(id) || !ACHIEVEMENTS[id]) return false;
-    const s = this.get(); s[id] = Date.now(); localStorage.setItem(this.key, JSON.stringify(s));
-    toast(ACHIEVEMENTS[id]); Audio.achievement();
-    return true;
-  },
-};
-function toast(a) {
-  const t = document.createElement('div');
-  t.className = 'achv-toast';
-  t.innerHTML = `<span class="achv-icon">${a.icon}</span><span><b>Achievement unlocked</b><br>${a.name} — ${a.desc}</span>`;
-  document.body.append(t);
-  requestAnimationFrame(() => t.classList.add('show'));
-  setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 400); }, 4200);
-}
-
-// ── loading quips & odds quips ───────────────────────────────────────────────
+// ── loading quips ────────────────────────────────────────────────────────────
 export const LOADERS = [
-  'Normalizing your feature vector…',
-  'Computing P(pass | vibes)…',
-  'Shuffling the deck of β coefficients…',
-  'Transposing error FIRST, as always…',
-  'Consulting the sigmoid oracle…',
-  'Building max-heap of your regrets…',
-  'Running gradient descent on your GPA…',
-  'Checking if R² can be negative (it can)…',
-  'Reticulating splines… wait, wrong course…',
-  'Bribing the invigilator…',
+  'CALIBRATING SIGMOID…', 'NORMALIZING FEATURE VECTOR…', 'BUILDING MAX-HEAP OF REGRETS…',
+  'COMPUTING P(PASS | VIBES)…', 'TRANSPOSING ERROR — FIRST, ALWAYS…', 'SEEDING THE GRIND…',
+  'RETICULATING β COEFFICIENTS…', 'INDUCING FOMO…',
 ];
 export const randomLoader = () => LOADERS[Math.floor(Math.random() * LOADERS.length)];
 
-export function oddsQuip(odds) {
-  if (odds >= 75) return 'basically guaranteed to haunt you Friday';
-  if (odds >= 60) return 'the house likes these odds';
-  if (odds >= 45) return 'a coin flip with extra steps';
-  if (odds >= 30) return 'longshot, but they love a surprise';
-  return 'you\'d be unlucky… but you did pick this major';
+// ── the guess-odds analyzer (the reinterpreted "gambling") ───────────────────
+// Computes P(full marks by pure guessing) from question STRUCTURE only — never
+// touches the answer, so nothing leaks. Returns display bits + a funny verdict.
+export function guessOdds(q) {
+  const p = q.payload || {};
+  let combos = 1, kind = '';
+  switch (q.type) {
+    case 'mcq': combos = (p.options?.length || 4); kind = `1 of ${combos} choices`; break;
+    case 'multiselect': {
+      const n = p.options?.length || 4;
+      combos = Math.pow(2, n); kind = `${n} options → 2^${n} = ${combos} combos`; break;
+    }
+    case 'dropdowns': combos = (p.blanks || []).reduce((a, b) => a * (b.options?.length || 1), 1); kind = `${(p.blanks || []).length} blanks`; break;
+    case 'matching': {
+      const k = (p.left || []).length, m = (p.options || []).length || 1;
+      combos = Math.pow(m, k); kind = `${k} rows × ${m} options`; break;
+    }
+    case 'ordering': { const n = (p.items || []).length; combos = factorial(n); kind = `${n}! orderings`; break; }
+    case 'numeric': combos = Infinity; kind = 'infinite real numbers'; break;
+    case 'text': combos = Infinity; kind = 'free text'; break;
+    default: combos = 4;
+  }
+  const pct = combos === Infinity ? 0 : 1 / combos;
+  return {
+    pct,                                   // 0..1
+    oneIn: combos,                         // Infinity for numeric/text
+    kind,
+    label: combos === Infinity ? '≈ 0%' : (pct >= 0.01 ? `${(pct * 100).toFixed(pct >= 0.1 ? 0 : 1)}%` : `1 in ${fmt(combos)}`),
+    verdict: verdictFor(q, pct),
+    note: noteFor(q),
+  };
+}
+function factorial(n) { let r = 1; for (let i = 2; i <= n; i++) r *= i; return r; }
+function fmt(n) { return n === Infinity ? '∞' : Number(n).toLocaleString('en-US'); }
+
+function verdictFor(q, pct) {
+  if (q.type === 'numeric' || q.type === 'text') return 'guessing is not a strategy, king.';
+  if (pct >= 0.5) return 'basically a coin flip — you could genuinely cook.';
+  if (pct >= 0.25) return 'one-in-a-few. cope is statistically viable.';
+  if (pct >= 0.1) return 'slim. maybe actually read the question.';
+  if (pct >= 0.02) return 'grim. a small prayer is advised.';
+  return 'better odds finding parking at SUTD, tbh.';
+}
+function noteFor(q) {
+  if (q.type === 'multiselect') return 'ticking all of them trips the −50%-per-wrong tax → usually a clean 0.';
+  if (q.type === 'ordering') return 'yes, that number is real. good luck.';
+  if (q.type === 'numeric') return 'a scientific calculator and actual maths are your only friends here.';
+  if (q.type === 'dropdowns') return 'each blank multiplies your suffering.';
+  return '';
 }

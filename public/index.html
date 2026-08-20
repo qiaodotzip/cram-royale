@@ -2,218 +2,173 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
-  <title>CRAM ROYALE — bet your GPA</title>
-  <meta name="description" content="A cyberpunk casino mock-exam for the DDW 10.020 final. Answer, wager, climb the leaderboard." />
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8E%B0%3C/text%3E%3C/svg%3E" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CRAM // S07 — DDW grinder</title>
+  <meta name="description" content="A HUD-styled question grinder for the DDW 10.020 final. Grind questions, top the board." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%2317181c'/%3E%3Ctext x='50' y='72' font-size='64' text-anchor='middle' fill='%23fff' font-family='monospace' font-weight='bold'%3E7%3C/text%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/css/styles.css" />
 </head>
 <body>
-  <div class="scanlines" aria-hidden="true"></div>
-  <div class="grid-floor" aria-hidden="true"></div>
+  <!-- global HUD frame -->
+  <div class="frame" aria-hidden="true">
+    <span class="corner tl"></span><span class="corner tr"></span>
+    <span class="corner bl"></span><span class="corner br"></span>
+    <span class="reg reg-1">+</span><span class="reg reg-2">+</span><span class="reg reg-3">+</span>
+    <span class="edge-red-l"></span><span class="edge-red-r"></span>
+  </div>
 
-  <!-- persistent HUD -->
-  <header id="hud" class="hidden">
-    <div class="hud-left">
-      <span class="hud-logo">🎰 CRAM<span class="accent">ROYALE</span></span>
-    </div>
-    <div class="hud-right">
-      <span id="hud-chips" class="hud-chips">🪙 0</span>
-      <button id="btn-leaderboard-hud" class="hud-btn" title="Leaderboard">🏆</button>
-      <button id="btn-home" class="hud-btn" title="Lobby">🏠</button>
-      <button id="btn-music" class="hud-btn" title="Music">🎵</button>
-      <button id="btn-sfx" class="hud-btn" title="Sound effects">🔊</button>
-    </div>
-  </header>
+  <!-- announcement toasts mount here -->
+  <div id="toast-stack" class="toast-stack"></div>
 
   <main>
-    <!-- ── LOGIN ─────────────────────────────────────────────── -->
-    <section id="screen-login" class="screen active">
-      <div class="login-wrap">
-        <h1 class="title glitch" data-text="CRAM ROYALE">CRAM ROYALE</h1>
-        <p class="subtitle">DATA-DRIVEN WAGERS · <span class="accent">bet your GPA</span></p>
-        <p class="tagline">The DDW 10.020 final, reimagined as a neon casino. Answer questions, wager chips, climb the board. The house — and the exam — always wins. Probably.</p>
-
-        <form id="login-form" class="login-form" autocomplete="off">
-          <label class="field-label">PICK YOUR DEGENERATE ALIAS</label>
-          <input id="handle-input" class="neon-input big" maxlength="24" placeholder="e.g. sigmoid_sniper" required />
-          <input id="emoji-input" type="hidden" value="🎰" />
-          <div class="emoji-row">
-            <button type="button" class="emoji-pick sel">🎰</button>
-            <button type="button" class="emoji-pick">🦈</button>
-            <button type="button" class="emoji-pick">🤖</button>
-            <button type="button" class="emoji-pick">💀</button>
-            <button type="button" class="emoji-pick">👾</button>
-            <button type="button" class="emoji-pick">🐉</button>
-            <button type="button" class="emoji-pick">🧠</button>
-            <button type="button" class="emoji-pick">🔥</button>
-          </div>
-          <button type="submit" class="btn btn-primary big">ENTER THE FLOOR ▶</button>
-        </form>
-        <button id="btn-view-lb-login" class="btn-ghost">view leaderboard</button>
-        <p class="disclaimer">chips are imaginary · your exam is not · study anyway</p>
+    <!-- ── HOME ─────────────────────────────────────────────── -->
+    <section id="screen-home" class="screen active">
+      <div class="hud-head">
+        <span class="slash">//</span><span class="mark">▚▚</span>
+        <h1 class="wordmark">CRAM<span class="unit">S07</span></h1>
+        <span class="corner-icon">◤</span>
+        <span class="tag-topright">[ DDW·10.020 ]</span>
       </div>
+
+      <p class="home-sub">DATA-DRIVEN <span class="red">GRINDER</span> — a question grinder for Friday's final. put your name in, then grind.</p>
+
+      <form id="name-form" autocomplete="off">
+        <div class="field">
+          <span class="field-num">000</span>
+          <input id="name-input" class="hud-input" maxlength="24" placeholder="YOUR NAME" required />
+          <span class="field-line"></span>
+        </div>
+      </form>
+
+      <nav class="menu">
+        <button class="hud-btn primary" data-action="grind">
+          <span class="btn-bar"></span>
+          <span class="btn-label">START GRIND</span>
+          <span class="btn-arrow">▶</span>
+          <span class="btn-hatch"></span>
+          <span class="btn-num">001</span>
+        </button>
+        <button class="hud-btn" data-action="mock">
+          <span class="btn-bar"></span>
+          <span class="btn-label">MOCK PAPER</span>
+          <span class="btn-arrow">▶</span>
+          <span class="btn-hatch"></span>
+          <span class="btn-num">002</span>
+          <span class="btn-side">SIDE MODE · NO BOARD</span>
+        </button>
+        <button class="hud-btn ghost" data-action="leaderboard">
+          <span class="btn-label">LEADERBOARD</span>
+          <span class="btn-arrow">▶</span>
+          <span class="btn-num">004</span>
+        </button>
+        <button class="hud-btn ghost" data-action="info">
+          <span class="btn-label">INFO</span>
+          <span class="btn-arrow">▶</span>
+          <span class="btn-num">006</span>
+        </button>
+      </nav>
+
+      <div class="live-strip">
+        <span class="live-dot"></span>
+        <span id="live-count">— grinding now</span>
+        <span class="live-sep">/</span>
+        <span id="live-total">— answered all-time</span>
+      </div>
+      <div class="ticker"><div id="ticker-track" class="ticker-track">booting live feed…</div></div>
+
+      <div class="foot-bar"><div class="foot-seg"></div><span class="foot-ver">S07 · 02 / 26</span></div>
     </section>
 
-    <!-- ── MODES ─────────────────────────────────────────────── -->
-    <section id="screen-modes" class="screen">
-      <p id="modes-greeting" class="greeting"></p>
-      <h2 class="section-title">CHOOSE YOUR TABLE</h2>
-      <div class="modes-grid">
-        <button class="mode-card" data-mode="mock">
-          <span class="mode-icon">📝</span>
-          <span class="mode-name">Mock Exam</span>
-          <span class="mode-blurb">The 21 real mock-final questions. The genuine article.</span>
-          <span class="mode-tag">21 Qs · 51 pts</span>
-        </button>
-        <button class="mode-card" data-mode="predicted">
-          <span class="mode-icon">🔮</span>
-          <span class="mode-name">Predicted Paper</span>
-          <span class="mode-blurb">Similar questions they might ask. Fresh drills across every topic.</span>
-          <span class="mode-tag">50 Qs · predicted</span>
-        </button>
-        <button class="mode-card" data-mode="all">
-          <span class="mode-icon">🎲</span>
-          <span class="mode-name">Full Degen Run</span>
-          <span class="mode-blurb">Everything, shuffled. Maximum chaos, maximum chips.</span>
-          <span class="mode-tag">71 Qs · chaos</span>
-        </button>
-        <button class="mode-card" data-mode="blitz">
-          <span class="mode-icon">⚡</span>
-          <span class="mode-name">Concept Blitz</span>
-          <span class="mode-blurb">Multi-select only. Fast money, brutal −50% penalties.</span>
-          <span class="mode-tag">multi-select</span>
-        </button>
+    <!-- ── PLAY (grind + mock share this) ───────────────────── -->
+    <section id="screen-play" class="screen">
+      <div class="play-top">
+        <button id="btn-exit" class="mini-btn" title="Home">◀ EXIT</button>
+        <span id="play-mode" class="play-mode">GRIND</span>
+        <span id="play-counter" class="play-counter">ANSWERED · 0</span>
+        <span id="play-live" class="play-live"></span>
+        <button id="btn-sfx" class="mini-btn" title="Sound">◧ SFX</button>
       </div>
-      <div class="modes-actions">
-        <button id="btn-modes-lb" class="btn-ghost">🏆 leaderboard</button>
-        <button id="btn-achievements" class="btn-ghost">🏅 achievements</button>
-      </div>
-    </section>
+      <div class="play-progress"><div id="play-progressbar"></div></div>
 
-    <!-- ── EXAM ──────────────────────────────────────────────── -->
-    <section id="screen-exam" class="screen">
-      <div class="exam-progress"><div id="exam-progressbar"></div></div>
-      <div class="exam-shell">
+      <div class="qcard">
         <div class="q-head">
-          <span id="q-progress" class="q-progress">Q1 / 21</span>
-          <span id="q-part" class="q-part">PART 1</span>
-          <span id="q-topic" class="q-topic">Topic</span>
-          <span id="q-points" class="q-points">3 pts</span>
-          <span id="q-source" class="q-source">★ REAL MOCK</span>
+          <span id="q-id" class="q-id">001</span>
+          <span id="q-topic" class="q-topic">topic</span>
+          <span id="q-points" class="q-points">2 PTS</span>
+          <span id="q-source" class="q-source">MOCK</span>
         </div>
 
         <div id="q-body" class="q-body"></div>
 
-        <!-- gambling panel -->
-        <div id="wager-panel" class="wager-panel">
-          <div class="odds-row">
-            <div class="odds-box">
-              <span class="odds-label">🎰 EXAM ODDS</span>
-              <span id="odds-value" class="odds-value">0%</span>
-              <div class="odds-bar"><div id="odds-fill" class="odds-fill"></div></div>
-              <span id="odds-quip" class="odds-quip"></span>
+        <!-- guess-odds analyzer -->
+        <div id="odds-panel" class="odds-panel">
+          <div class="odds-head"><span class="odds-title">GUESS ODDS</span><span id="odds-kind" class="odds-kind"></span></div>
+          <div class="odds-main">
+            <span id="odds-value" class="odds-value">—</span>
+            <div class="odds-text">
+              <span id="odds-verdict" class="odds-verdict"></span>
+              <span id="odds-note" class="odds-note"></span>
             </div>
-            <div class="mult-box">
-              <span class="odds-label">PAYOUT</span>
-              <span id="mult-value" class="mult-value">2.0×</span>
-              <span class="mult-sub">on a perfect answer</span>
-            </div>
-          </div>
-
-          <div class="wager-controls">
-            <div class="wager-readout">
-              <span>WAGER <b id="wager-amount">50</b> 🪙</span>
-              <span class="wager-outcome">win <b id="wager-win" class="up">+0</b> · lose <b id="wager-lose" class="down">-0</b></span>
-            </div>
-            <input id="wager-slider" type="range" min="0" max="1000" value="50" class="wager-slider" />
-            <div class="wager-quicks">
-              <button class="wager-quick" data-amt="0">0</button>
-              <button class="wager-quick" data-amt="10">10</button>
-              <button class="wager-quick" data-amt="50">50</button>
-              <button class="wager-quick" data-amt="100">100</button>
-              <button class="wager-quick" data-amt="max">ALL-IN</button>
-            </div>
-          </div>
-
-          <div class="exam-btns">
-            <button id="btn-buy" class="btn btn-buy">🕳️ Buy a hint (🪙 <span id="buy-cost">150</span>)</button>
-            <button id="btn-lockin" class="btn btn-primary">LOCK IN &amp; SPIN 🎲</button>
           </div>
         </div>
 
-        <!-- result panel -->
+        <div class="play-actions">
+          <button id="btn-confirm" class="hud-btn primary wide"><span class="btn-bar"></span><span class="btn-label">CONFIRM</span><span class="btn-arrow">▶</span></button>
+        </div>
+
         <div id="result-panel" class="result-panel hidden"></div>
       </div>
     </section>
 
-    <!-- ── RESULTS ───────────────────────────────────────────── -->
-    <section id="screen-results" class="screen">
-      <div class="results-wrap">
-        <div id="res-grade" class="res-grade">S</div>
-        <h2 class="section-title">CASHED OUT</h2>
-        <p id="res-msg" class="res-msg"></p>
-        <div class="res-grid">
-          <div class="res-cell"><span class="res-k">SCORE</span><span id="res-score" class="res-v">0 / 51</span></div>
-          <div class="res-cell"><span class="res-k">PERCENT</span><span id="res-pct" class="res-v">0%</span></div>
-          <div class="res-cell"><span class="res-k">CORRECT</span><span id="res-correct" class="res-v">0 / 21</span></div>
-          <div class="res-cell"><span class="res-k">ACCURACY</span><span id="res-acc" class="res-v">0%</span></div>
-        </div>
-        <div class="res-chips-wrap">
-          <span class="res-k">CHIPS THIS RUN</span>
-          <span id="res-chips" class="res-big up">+0</span>
-          <span id="res-balance" class="res-balance">🪙 0</span>
-        </div>
-        <p id="res-rank" class="res-rank"></p>
-        <div class="results-actions">
-          <button id="btn-again" class="btn btn-primary">RUN IT BACK ▶</button>
-          <button id="btn-res-lb" class="btn-ghost">🏆 leaderboard</button>
-          <button id="btn-share" class="btn-ghost">📋 share</button>
-        </div>
+    <!-- ── LEADERBOARD ──────────────────────────────────────── -->
+    <section id="screen-board" class="screen">
+      <div class="hud-head sub">
+        <span class="slash">//</span><h2 class="wordmark small">LEADERBOARD</h2>
+        <span class="tag-topright">RANKED · BY VOLUME</span>
+      </div>
+      <p class="board-sub">it's practice — <span class="red">right or wrong doesn't matter.</span> only the grind counts.</p>
+      <div id="board-body" class="board-body"></div>
+      <div class="board-actions">
+        <button id="btn-board-refresh" class="hud-btn ghost"><span class="btn-label">REFRESH</span><span class="btn-arrow">↻</span></button>
+        <button id="btn-board-back" class="hud-btn"><span class="btn-bar"></span><span class="btn-label">BACK</span><span class="btn-arrow">◀</span></button>
       </div>
     </section>
 
-    <!-- ── LEADERBOARD ───────────────────────────────────────── -->
-    <section id="screen-leaderboard" class="screen">
-      <div class="lb-wrap">
-        <h2 class="section-title">🏆 THE BOARD</h2>
-        <div class="lb-tabs">
-          <button class="lb-tab active" data-board="score">TOP SCORE</button>
-          <button class="lb-tab" data-board="chips">💰 HIGH ROLLERS</button>
-        </div>
-        <div id="lb-body" class="lb-body"></div>
-        <button id="lb-close" class="btn btn-primary">◀ BACK</button>
+    <!-- ── INFO ─────────────────────────────────────────────── -->
+    <section id="screen-info" class="screen">
+      <div class="hud-head sub"><span class="slash">//</span><h2 class="wordmark small">INFO</h2></div>
+      <div class="info-body">
+        <p><b>CRAM // S07</b> is a question grinder for the DDW 10.020 final (Fri 21 Aug).</p>
+        <p><span class="red">▚</span> <b>START GRIND</b> — endless practice pulled from the mock + a bank of predicted questions. Every answer bumps your count on the <b>leaderboard</b>. Right or wrong doesn't matter — reps do.</p>
+        <p><span class="red">▚</span> <b>MOCK PAPER</b> — the real mock paper, in order. A side mode, no leaderboard.</p>
+        <p><span class="red">▚</span> <b>GUESS ODDS</b> — before you answer, it tells you your odds of just guessing it right. Not advice. Comedy.</p>
+        <p><span class="red">▚</span> get a question wrong and it explains why. that's the actual point.</p>
+        <p class="info-small">questions reconstructed from the DDW mock + practice bank. answers graded server-side. no accounts, no passwords, just a name. good luck.</p>
+      </div>
+      <button id="btn-info-back" class="hud-btn"><span class="btn-bar"></span><span class="btn-label">BACK</span><span class="btn-arrow">◀</span></button>
+    </section>
+
+    <!-- ── MOCK SUMMARY ─────────────────────────────────────── -->
+    <section id="screen-summary" class="screen">
+      <div class="hud-head sub"><span class="slash">//</span><h2 class="wordmark small">MOCK · COMPLETE</h2></div>
+      <div class="summary-body">
+        <div class="sum-cell"><span class="sum-k">SCORE</span><span id="sum-score" class="sum-v">0 / 0</span></div>
+        <div class="sum-cell"><span class="sum-k">PERCENT</span><span id="sum-pct" class="sum-v">0%</span></div>
+        <div class="sum-cell"><span class="sum-k">CORRECT</span><span id="sum-correct" class="sum-v">0 / 0</span></div>
+      </div>
+      <p id="sum-msg" class="sum-msg"></p>
+      <div class="summary-actions">
+        <button id="btn-sum-grind" class="hud-btn primary"><span class="btn-bar"></span><span class="btn-label">GO GRIND</span><span class="btn-arrow">▶</span></button>
+        <button id="btn-sum-home" class="hud-btn ghost"><span class="btn-label">HOME</span><span class="btn-arrow">◀</span></button>
       </div>
     </section>
   </main>
 
-  <!-- loader overlay -->
-  <div id="loader" class="loader">
-    <div class="loader-spinner">🎰</div>
-    <div id="loader-text" class="loader-text">shuffling…</div>
-  </div>
-
-  <!-- achievements modal -->
-  <div id="achv-modal" class="modal">
-    <div class="modal-card">
-      <h3>🏅 ACHIEVEMENTS</h3>
-      <div id="achv-grid" class="achv-grid"></div>
-      <button id="achv-close" class="btn btn-primary">CLOSE</button>
-    </div>
-  </div>
-
-  <!-- loan shark modal -->
-  <div id="shark-modal" class="modal">
-    <div class="modal-card shark">
-      <div class="shark-face">🦈</div>
-      <h3>BUSTED.</h3>
-      <p>You're out of chips, friend. The house noticed. I can spot you <b>250 chips</b>… no strings. (There are strings. There are always strings.)</p>
-      <div class="shark-btns">
-        <button id="shark-yes" class="btn btn-primary">Take the deal 🤝</button>
-        <button id="shark-no" class="btn-ghost">Walk away broke</button>
-      </div>
-    </div>
-  </div>
+  <!-- loader -->
+  <div id="loader" class="loader"><div class="loader-mark">▚▚</div><div id="loader-text" class="loader-text">…</div></div>
 
   <script type="module" src="/js/app.js"></script>
 </body>
