@@ -55,11 +55,49 @@ const STEMS = {
   'mock-q21': 'Compute **R²** over the 3 test points (2 d.p.).',
 };
 
-export const actualMockQuestions = mockQuestions.map((q) => ({
-  ...q,
-  id: q.id.replace('mock-', 'actual-'),
-  source: 'actual',
-  images: IMAGES[q.id] || [],
-  stem: STEMS[q.id] || q.stem,
-  code: null, // the code/diagram now lives in the image
-}));
+// Per-question overrides: some questions are pure code and are better REPLICATED
+// as text than shown as a (glary, sometimes-truncated) screenshot. Q1 is a code-
+// completion whose real form has 6 dropdowns — including the two `while`-condition
+// blanks my typed mock had left fixed — so we rebuild it faithfully here.
+const OVERRIDES = {
+  'mock-q1': {
+    images: [], // replicate as text, no screenshot
+    stem: "Study this Insertion Sort. For `array = [3, 5, 1, 2]` the printed output is:\n\n```\narray: [3, 5, 1, 2]\narray: [3, 5, 2, 1]\narray: [3, 5, 2, 1]\narray: [5, 3, 2, 1]\n```\n\nFill all six blanks so the code produces exactly this output.",
+    code:
+`def insertion_sort(array):
+    n = len(array)
+    for outer_index in range( ⟨b1⟩ , ⟨b2⟩ , ⟨b3⟩ ):
+        inner_index = outer_index
+        while ( inner_index < ⟨b4⟩ and array[inner_index] < ⟨b5⟩ ):
+            temp = array[inner_index]
+            array[inner_index] = array[inner_index + 1]
+            array[inner_index + 1] = temp
+            inner_index += ⟨b6⟩
+        print("array: ", array)`,
+    payload: {
+      blanks: [
+        { id: 'b1', label: 'range start', options: ['0', 'n-1', 'n', '1', 'n-2'] },
+        { id: 'b2', label: 'range stop', options: ['0', '-1', 'n', 'n-1'] },
+        { id: 'b3', label: 'range step', options: ['1', '-1', '2', '-2'] },
+        { id: 'b4', label: 'inner_index <', options: ['n', 'n-1', '0', 'outer_index'] },
+        { id: 'b5', label: 'array[inner_index] <', options: ['array[inner_index+1]', 'array[inner_index-1]', 'array[outer_index]', 'array[0]'] },
+        { id: 'b6', label: 'inner step', options: ['1', '-1', '2', '0'] },
+      ],
+    },
+    answer: { b1: 'n-1', b2: '-1', b3: '-1', b4: 'n-1', b5: 'array[inner_index+1]', b6: '1' },
+    explanation: "4 printed lines → `range(n-1, -1, -1)`. The while pushes larger elements right: `inner_index < n-1 and array[inner_index] < array[inner_index+1]`, stepping `inner_index += 1`.",
+  },
+};
+
+export const actualMockQuestions = mockQuestions.map((q) => {
+  const ov = OVERRIDES[q.id];
+  return {
+    ...q,
+    ...ov,
+    id: q.id.replace('mock-', 'actual-'),
+    source: 'actual',
+    images: ov ? (ov.images ?? []) : (IMAGES[q.id] || []),
+    stem: ov?.stem ?? (STEMS[q.id] || q.stem),
+    code: ov?.code ?? null, // non-overridden questions show the code in the image
+  };
+});
