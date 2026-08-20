@@ -70,7 +70,9 @@ function numericW(q, onInteract) {
   const wrap = el('div', 'widget widget-numeric');
   const input = el('input', 'neon-input');
   input.type = 'text'; input.inputMode = 'decimal';
-  input.placeholder = q.payload?.placeholder || 'your answer';
+  // NEVER echo the stored example (it's the answer). Hint the format only.
+  const dp = q.payload?.decimals;
+  input.placeholder = dp > 0 ? `your answer (${dp} d.p.)` : 'your answer';
   input.autocomplete = 'off';
   input.addEventListener('input', onInteract);
   wrap.append(input);
@@ -86,7 +88,8 @@ function numericW(q, onInteract) {
 function textW(q, onInteract) {
   const wrap = el('div', 'widget widget-numeric');
   const input = el('input', 'neon-input');
-  input.type = 'text'; input.placeholder = q.payload?.placeholder || 'type the exact output';
+  // generic prompt only — never surface a stored example that could be the answer
+  input.type = 'text'; input.placeholder = 'type the exact output';
   input.autocomplete = 'off';
   input.addEventListener('input', onInteract);
   wrap.append(input);
