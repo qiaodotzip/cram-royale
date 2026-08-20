@@ -1,6 +1,7 @@
 // PostgreSQL access layer. Railway injects DATABASE_URL when a Postgres plugin
 // is attached; locally we point at the Docker container (see .env.example).
 import pg from 'pg';
+import { TITLE_MAP } from './titles.js';
 
 const { Pool } = pg;
 
@@ -13,13 +14,7 @@ if (!connectionString) {
 }
 
 const needsSsl = process.env.DATABASE_SSL === 'true' || /sslmode=require/.test(connectionString);
-
-export const pool = new Pool({
-  connectionString,
-  ssl: needsSsl ? { rejectUnauthorized: false } : false,
-  max: 10,
-});
-
+export const pool = new Pool({ connectionString, ssl: needsSsl ? { rejectUnauthorized: false } : false, max: 10 });
 export const query = (text, params) => pool.query(text, params);
 
 // ── schema ───────────────────────────────────────────────────────────────────
@@ -28,34 +23,28 @@ export async function initSchema() {
     CREATE TABLE IF NOT EXISTS players (
       id         SERIAL PRIMARY KEY,
       handle     TEXT UNIQUE NOT NULL,
-      emoji      TEXT DEFAULT '',
       answered   BIGINT DEFAULT 0,
       correct    BIGINT DEFAULT 0,
+      currency   BIGINT DEFAULT 0,
+      title      TEXT,
+      titles     TEXT[] DEFAULT '{}',
       created_at TIMESTAMPTZ DEFAULT now(),
       last_seen  TIMESTAMPTZ DEFAULT now()
     );
 
     CREATE TABLE IF NOT EXISTS questions (
-      id          TEXT PRIMARY KEY,
-      source      TEXT NOT NULL,
-      part        INT,
-      seq         INT,
-      topic       TEXT,
-      points      NUMERIC,
-      type        TEXT,
-      exam_odds   NUMERIC,
-      stem        TEXT,
-      code        TEXT,
-      payload     JSONB,
-      answer      JSONB,
-      explanation TEXT
+      id TEXT PRIMARY KEY, source TEXT NOT NULL, part INT, seq INT, topic TEXT,
+      points NUMERIC, type TEXT, exam_odds NUMERIC, stem TEXT, code TEXT,
+      payload JSONB, answer JSONB, explanation TEXT
     );
 
     CREATE TABLE IF NOT EXISTS announcements (
       id         SERIAL PRIMARY KEY,
       handle     TEXT,
-      emoji      TEXT,
+      title      TEXT,
+      kind       TEXT DEFAULT 'milestone',
       milestone  BIGINT,
+      detail     TEXT,
       created_at TIMESTAMPTZ DEFAULT now()
     );
 
@@ -64,94 +53,109 @@ export async function initSchema() {
   `);
 }
 
+const shape = (r) => r && ({
+  handle: r.handle, answered: Number(r.answered), correct: Number(r.correct),
+  currency: Number(r.currency), title: r.title, titles: r.titles || [],
+});
+
 // ── players ──────────────────────────────────────────────────────────────────
-export async function getOrCreatePlayer(handle, emoji = '') {
-  handle = String(handle || '').trim().slice(0, 24);
-  if (!handle) throw new Error('name required');
-  const { rows } = await query(
-    `INSERT INTO players (handle, emoji) VALUES ($1, $2)
-     ON CONFLICT (handle) DO UPDATE SET last_seen = now(),
-       emoji = COALESCE(NULLIF(EXCLUDED.emoji, ''), players.emoji)
-     RETURNING id, handle, emoji, answered, correct`,
-    [handle, emoji]
-  );
-  return rows[0];
+export async function findPlayer(name) {
+  const { rows } = await query(`SELECT * FROM players WHERE lower(handle) = lower($1)`, [String(name || '').trim()]);
+  return rows[0] ? shape(rows[0]) : null;
 }
 
-// Increment a grinder's answered count (and correct tally). Returns the new
-// answered total so the caller can check for milestones.
+// Returns { player, existed }. Case-insensitive: same name = same account (login).
+export async function loginOrCreate(name) {
+  name = String(name || '').trim().slice(0, 24);
+  if (!name) throw new Error('name required');
+  const existing = await findPlayer(name);
+  if (existing) { await touchPlayer(existing.handle); return { player: existing, existed: true }; }
+  const { rows } = await query(
+    `INSERT INTO players (handle) VALUES ($1)
+     ON CONFLICT (handle) DO UPDATE SET last_seen = now() RETURNING *`, [name]);
+  return { player: shape(rows[0]), existed: false };
+}
+
+export async function getPlayer(handle) {
+  const { rows } = await query(`SELECT * FROM players WHERE handle = $1`, [handle]);
+  return shape(rows[0]);
+}
+
 export async function bumpAnswered(handle, wasCorrect) {
   const { rows } = await query(
-    `UPDATE players
-       SET answered = answered + 1,
-           correct  = correct + $2,
-           last_seen = now()
-     WHERE handle = $1
-     RETURNING answered, correct`,
-    [handle, wasCorrect ? 1 : 0]
-  );
+    `UPDATE players SET answered = answered + 1, correct = correct + $2, last_seen = now()
+     WHERE handle = $1 RETURNING answered, correct, title`,
+    [handle, wasCorrect ? 1 : 0]);
   return rows[0] || null;
 }
+export async function addCurrency(handle, delta) {
+  const { rows } = await query(
+    `UPDATE players SET currency = GREATEST(0, currency + $2), last_seen = now()
+     WHERE handle = $1 RETURNING currency`, [handle, Math.round(delta)]);
+  return rows[0] ? Number(rows[0].currency) : null;
+}
+export async function touchPlayer(handle) { await query(`UPDATE players SET last_seen = now() WHERE handle = $1`, [handle]); }
 
-export async function touchPlayer(handle) {
-  await query(`UPDATE players SET last_seen = now() WHERE handle = $1`, [handle]);
+// ── titles ───────────────────────────────────────────────────────────────────
+export async function buyTitle(handle, id) {
+  const t = TITLE_MAP[id];
+  if (!t) throw new Error('unknown title');
+  const p = await getPlayer(handle);
+  if (!p) throw new Error('unknown player');
+  if (p.titles.includes(id)) return { ok: false, reason: 'owned', ...p };
+  if (p.currency < t.price) return { ok: false, reason: 'broke', ...p };
+  const { rows } = await query(
+    `UPDATE players SET currency = currency - $2, titles = array_append(titles, $3),
+       title = COALESCE(title, $3)
+     WHERE handle = $1 RETURNING *`, [handle, t.price, id]);
+  return { ok: true, ...shape(rows[0]) };
+}
+export async function equipTitle(handle, id) {
+  const p = await getPlayer(handle);
+  if (!p) throw new Error('unknown player');
+  const val = id && p.titles.includes(id) ? id : null; // null = unequip
+  const { rows } = await query(`UPDATE players SET title = $2 WHERE handle = $1 RETURNING *`, [handle, val]);
+  return shape(rows[0]);
 }
 
-// ── questions (never selects the `answer` column) ────────────────────────────
-export async function getQuestionsForClient(mode) {
-  const where = mode === 'mock' ? `WHERE source = 'mock'` : ''; // grind = everything
+// ── questions (server keeps the answer to compute odds, then strips it) ──────
+export async function getQuestionsRaw(mode) {
+  const where = mode === 'mock' ? `WHERE source = 'mock'` : '';
   const { rows } = await query(
-    `SELECT id, source, part, seq, topic, points, type, exam_odds, stem, code, payload
-     FROM questions ${where} ORDER BY seq`
-  );
+    `SELECT id, source, part, seq, topic, points, type, stem, code, payload, answer
+     FROM questions ${where} ORDER BY seq`);
   return rows;
 }
-
 export async function getFullQuestion(id) {
   const { rows } = await query(`SELECT * FROM questions WHERE id = $1`, [id]);
   return rows[0] || null;
 }
 
-// ── leaderboard (grind: rank by # answered) ──────────────────────────────────
+// ── leaderboard ──────────────────────────────────────────────────────────────
 export async function topGrinders(limit = 25) {
   const { rows } = await query(
-    `SELECT handle, emoji, answered, correct
-       FROM players
-      WHERE answered > 0
-      ORDER BY answered DESC, correct DESC, last_seen ASC
-      LIMIT $1`,
-    [limit]
-  );
+    `SELECT handle, answered, correct, title FROM players
+      WHERE answered > 0 ORDER BY answered DESC, correct DESC, last_seen ASC LIMIT $1`, [limit]);
   return rows;
 }
-
-// ── live FOMO ────────────────────────────────────────────────────────────────
 export async function liveStats() {
   const { rows } = await query(`
-    SELECT
-      (SELECT count(*)::int FROM players WHERE last_seen > now() - interval '3 minutes') AS grinding,
-      (SELECT COALESCE(sum(answered), 0)::bigint FROM players) AS total_answered,
-      (SELECT count(*)::int FROM players) AS players
-  `);
+    SELECT (SELECT count(*)::int FROM players WHERE last_seen > now() - interval '3 minutes') AS grinding,
+           (SELECT COALESCE(sum(answered),0)::bigint FROM players) AS total_answered,
+           (SELECT count(*)::int FROM players) AS players`);
   return rows[0];
 }
 
-export async function addAnnouncement(handle, emoji, milestone) {
+// ── announcements ────────────────────────────────────────────────────────────
+export async function addAnnouncement(handle, title, kind, milestone, detail) {
   const { rows } = await query(
-    `INSERT INTO announcements (handle, emoji, milestone) VALUES ($1,$2,$3) RETURNING id`,
-    [handle, emoji, milestone]
-  );
+    `INSERT INTO announcements (handle, title, kind, milestone, detail) VALUES ($1,$2,$3,$4,$5) RETURNING id`,
+    [handle, title, kind, milestone, detail]);
   return rows[0].id;
 }
-
 export async function getAnnouncements(sinceId = 0, limit = 15) {
   const { rows } = await query(
-    `SELECT id, handle, emoji, milestone, created_at
-       FROM announcements
-      WHERE id > $1
-      ORDER BY id DESC
-      LIMIT $2`,
-    [sinceId, limit]
-  );
+    `SELECT id, handle, title, kind, milestone, detail, created_at
+       FROM announcements WHERE id > $1 ORDER BY id DESC LIMIT $2`, [sinceId, limit]);
   return rows;
 }

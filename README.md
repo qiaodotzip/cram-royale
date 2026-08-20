@@ -13,12 +13,20 @@ Built for friends who are revising. The humour is a joke. The questions are not.
   affect your rank, because it's practice.
 - **MOCK PAPER** (side mode) — the real mock paper in order. No leaderboard, just a
   score summary at the end.
-- **Live FOMO** — when anyone hits a milestone (10, then every 25) a global
-  announcement fires: *"stef just hit 50 questions"*. Plus a live "N grinding now".
-- **GUESS ODDS** — before you answer, it computes your odds of getting it right by
-  *pure guessing* (e.g. 4 multi-select options → 1-in-16) with a snarky verdict. It's
-  comedy, not advice.
+- **Live FOMO** — when anyone hits a milestone (10, then every 25) or wins a gamble, a
+  big banner slides in across the top *"stef just hit 50 questions"* — even mid-question.
+  Plus a live "N grinding now".
+- **GUESS ODDS** — before you answer, it computes your real odds of getting it right by
+  *pure guessing*, with the full partial-credit breakdown for multi-selects (chance of
+  any marks, average score, what "tick everything" actually scores) and a snarky
+  real-world comparison. It's comedy, not advice.
+- **I'LL GAMBLE** — one button auto-submits a random answer. Land it and you win
+  **◈ currency** + a global shout-out; the longer the odds, the bigger the payout.
+  Spend currency on **gambling titles** (LUCKY → MADE MAN) that ride next to your name
+  on the board.
 - **Get it wrong → it explains why.** That's the actual point.
+- **Your name is your account** — no passwords. Re-enter it and you pick up where you
+  left off (with an in-theme "continue as …?" confirm).
 - Every question format the exam uses: multi-select (with the true −50%/wrong-pick
   penalty), dropdown fill-in-the-blank, numeric (tolerance-checked), matching, jumbled
   ordering, MCQ. Answers are graded **server-side** and never shipped to the client.

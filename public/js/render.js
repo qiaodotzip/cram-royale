@@ -77,6 +77,7 @@ function numericW(q, onInteract) {
   return {
     el: wrap,
     getResponse: () => (input.value.trim() === '' ? null : parseFloat(input.value.replace(/,/g, ''))),
+    randomFill() { const v = Math.floor(Math.random() * 21); input.value = String(v); return v; },
     reveal(correct) { wrap.append(el('div', 'reveal-note', `Correct answer: <b>${correct}</b>`)); },
     lock() { input.disabled = true; },
     focus() { input.focus(); },
@@ -92,6 +93,7 @@ function textW(q, onInteract) {
   return {
     el: wrap,
     getResponse: () => (input.value.trim() === '' ? null : input.value),
+    randomFill() { const pool = ['0', '1', 'true', 'false', 'DataFrame', 'Eng', '(4, 4)']; const v = pool[Math.floor(Math.random() * pool.length)]; input.value = v; return v; },
     reveal(correct) { wrap.append(el('div', 'reveal-note', `Accepted answer: <b>${correct}</b>`)); },
     lock() { input.disabled = true; },
     focus() { input.focus(); },
@@ -127,6 +129,16 @@ function choiceW(q, onInteract, multi) {
   return {
     el: wrap,
     getResponse: () => (multi ? [...state] : ([...state][0] ?? null)),
+    randomFill() {
+      state.clear(); rows.forEach((r) => r.classList.remove('sel'));
+      if (multi) {
+        rows.forEach((row, key) => { if (Math.random() < 0.5) { state.add(key); row.classList.add('sel'); } });
+        return [...state];
+      }
+      const keys = [...rows.keys()]; const k = keys[Math.floor(Math.random() * keys.length)];
+      state.add(k); rows.get(k).classList.add('sel');
+      return k;
+    },
     reveal(correct) {
       const cset = new Set(Array.isArray(correct) ? correct : [correct]);
       rows.forEach((row, key) => {
@@ -180,6 +192,11 @@ function dropdownsW(q, onInteract) {
   return {
     el: wrap,
     getResponse: () => { const r = {}; selects.forEach((s, id) => (r[id] = s.value)); return r; },
+    randomFill() {
+      const r = {};
+      selects.forEach((s, id) => { const b = blanks.find((x) => x.id === id); const opt = b.options[Math.floor(Math.random() * b.options.length)]; s.value = opt; r[id] = opt; });
+      return r;
+    },
     reveal(correct) {
       selects.forEach((s, id) => {
         s.classList.add(s.value === String(correct[id]) ? 'right' : 'wrong');
@@ -213,6 +230,11 @@ function matchingW(q, onInteract) {
   return {
     el: wrap,
     getResponse: () => { const r = {}; selects.forEach((s, id) => (r[id] = s.value)); return r; },
+    randomFill() {
+      const r = {};
+      selects.forEach((s, id) => { const opt = options[Math.floor(Math.random() * options.length)]; s.value = opt; r[id] = opt; });
+      return r;
+    },
     reveal(correct) {
       selects.forEach((s, id) => {
         const ok = s.value === String(correct[id]);
@@ -252,6 +274,7 @@ function orderingW(q, onInteract) {
   return {
     el: wrap,
     getResponse: () => items.map((i) => i.id),
+    randomFill() { items = shuffle(items); render(); return items.map((i) => i.id); },
     reveal(correct) {
       [...list.children].forEach((row, idx) => {
         row.classList.add(row.dataset.id === correct[idx] ? 'right' : 'wrong');

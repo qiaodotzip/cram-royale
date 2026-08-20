@@ -12,7 +12,6 @@
   <link rel="stylesheet" href="/css/styles.css" />
 </head>
 <body>
-  <!-- global HUD frame -->
   <div class="frame" aria-hidden="true">
     <span class="corner tl"></span><span class="corner tr"></span>
     <span class="corner bl"></span><span class="corner br"></span>
@@ -20,8 +19,8 @@
     <span class="edge-red-l"></span><span class="edge-red-r"></span>
   </div>
 
-  <!-- announcement toasts mount here -->
-  <div id="toast-stack" class="toast-stack"></div>
+  <!-- big sliding announcement banner (visible on every screen, even mid-question) -->
+  <div id="announce-banner" class="announce-banner"><div id="announce-inner" class="announce-inner"></div></div>
 
   <main>
     <!-- ── HOME ─────────────────────────────────────────────── -->
@@ -30,10 +29,13 @@
         <span class="slash">//</span><span class="mark">▚▚</span>
         <h1 class="wordmark">CRAM<span class="unit">S07</span></h1>
         <span class="corner-icon">◤</span>
-        <span class="tag-topright">[ DDW·10.020 ]</span>
+        <div class="head-right">
+          <button id="home-chip" class="chip" title="Titles shop">◈ <span id="home-currency">0</span></button>
+          <span class="tag-topright">[ DDW·10.020 ]</span>
+        </div>
       </div>
 
-      <p class="home-sub">DATA-DRIVEN <span class="red">GRINDER</span> — a question grinder for Friday's final. put your name in, then grind.</p>
+      <p class="home-sub">DATA-DRIVEN <span class="red">GRINDER</span> — a question grinder for Friday's final. put your name in, then grind. hop in and out whenever.</p>
 
       <form id="name-form" autocomplete="off">
         <div class="field">
@@ -45,50 +47,41 @@
 
       <nav class="menu">
         <button class="hud-btn primary" data-action="grind">
-          <span class="btn-bar"></span>
-          <span class="btn-label">START GRIND</span>
-          <span class="btn-arrow">▶</span>
-          <span class="btn-hatch"></span>
-          <span class="btn-num">001</span>
-        </button>
-        <button class="hud-btn" data-action="mock">
-          <span class="btn-bar"></span>
-          <span class="btn-label">MOCK PAPER</span>
-          <span class="btn-arrow">▶</span>
-          <span class="btn-hatch"></span>
-          <span class="btn-num">002</span>
-          <span class="btn-side">SIDE MODE · NO BOARD</span>
+          <span class="btn-bar"></span><span class="btn-label">START GRIND</span><span class="btn-arrow">▶</span>
+          <span class="btn-hatch"></span><span class="btn-num">001</span>
         </button>
         <button class="hud-btn ghost" data-action="leaderboard">
-          <span class="btn-label">LEADERBOARD</span>
-          <span class="btn-arrow">▶</span>
-          <span class="btn-num">004</span>
+          <span class="btn-label">LEADERBOARD</span><span class="btn-arrow">▶</span><span class="btn-num">002</span>
         </button>
         <button class="hud-btn ghost" data-action="info">
-          <span class="btn-label">INFO</span>
-          <span class="btn-arrow">▶</span>
-          <span class="btn-num">006</span>
+          <span class="btn-label">INFO</span><span class="btn-arrow">▶</span><span class="btn-num">004</span>
         </button>
+        <div class="menu-mini">
+          <button class="hud-btn ghost small" data-action="mock">
+            <span class="btn-label">MOCK PAPER</span><span class="btn-arrow">▶</span>
+            <span class="btn-side">SIDE · NO BOARD</span>
+          </button>
+        </div>
       </nav>
 
       <div class="live-strip">
         <span class="live-dot"></span>
-        <span id="live-count">— grinding now</span>
-        <span class="live-sep">/</span>
+        <span id="live-count">— grinding now</span><span class="live-sep">/</span>
         <span id="live-total">— answered all-time</span>
       </div>
       <div class="ticker"><div id="ticker-track" class="ticker-track">booting live feed…</div></div>
-
       <div class="foot-bar"><div class="foot-seg"></div><span class="foot-ver">S07 · 02 / 26</span></div>
     </section>
 
-    <!-- ── PLAY (grind + mock share this) ───────────────────── -->
+    <!-- ── PLAY ─────────────────────────────────────────────── -->
     <section id="screen-play" class="screen">
       <div class="play-top">
-        <button id="btn-exit" class="mini-btn" title="Home">◀ EXIT</button>
+        <button id="btn-exit" class="mini-btn" title="Menu">◀ MENU</button>
         <span id="play-mode" class="play-mode">GRIND</span>
         <span id="play-counter" class="play-counter">ANSWERED · 0</span>
-        <span id="play-live" class="play-live"></span>
+        <span class="play-spacer"></span>
+        <button id="play-chip" class="chip" title="Titles shop">◈ <span id="play-currency">0</span></button>
+        <button id="btn-board" class="mini-btn" title="Leaderboard">▤ BOARD</button>
         <button id="btn-sfx" class="mini-btn" title="Sound">◧ SFX</button>
       </div>
       <div class="play-progress"><div id="play-progressbar"></div></div>
@@ -103,16 +96,17 @@
 
         <div id="q-body" class="q-body"></div>
 
-        <!-- guess-odds analyzer -->
         <div id="odds-panel" class="odds-panel">
           <div class="odds-head"><span class="odds-title">GUESS ODDS</span><span id="odds-kind" class="odds-kind"></span></div>
           <div class="odds-main">
             <span id="odds-value" class="odds-value">—</span>
             <div class="odds-text">
               <span id="odds-verdict" class="odds-verdict"></span>
-              <span id="odds-note" class="odds-note"></span>
+              <span id="odds-real" class="odds-real"></span>
             </div>
+            <button id="btn-gamble" class="gamble-btn">🎲 I'LL&nbsp;GAMBLE</button>
           </div>
+          <ul id="odds-detail" class="odds-detail"></ul>
         </div>
 
         <div class="play-actions">
@@ -123,30 +117,17 @@
       </div>
     </section>
 
-    <!-- ── LEADERBOARD ──────────────────────────────────────── -->
-    <section id="screen-board" class="screen">
-      <div class="hud-head sub">
-        <span class="slash">//</span><h2 class="wordmark small">LEADERBOARD</h2>
-        <span class="tag-topright">RANKED · BY VOLUME</span>
-      </div>
-      <p class="board-sub">it's practice — <span class="red">right or wrong doesn't matter.</span> only the grind counts.</p>
-      <div id="board-body" class="board-body"></div>
-      <div class="board-actions">
-        <button id="btn-board-refresh" class="hud-btn ghost"><span class="btn-label">REFRESH</span><span class="btn-arrow">↻</span></button>
-        <button id="btn-board-back" class="hud-btn"><span class="btn-bar"></span><span class="btn-label">BACK</span><span class="btn-arrow">◀</span></button>
-      </div>
-    </section>
-
     <!-- ── INFO ─────────────────────────────────────────────── -->
     <section id="screen-info" class="screen">
       <div class="hud-head sub"><span class="slash">//</span><h2 class="wordmark small">INFO</h2></div>
       <div class="info-body">
         <p><b>CRAM // S07</b> is a question grinder for the DDW 10.020 final (Fri 21 Aug).</p>
-        <p><span class="red">▚</span> <b>START GRIND</b> — endless practice pulled from the mock + a bank of predicted questions. Every answer bumps your count on the <b>leaderboard</b>. Right or wrong doesn't matter — reps do.</p>
-        <p><span class="red">▚</span> <b>MOCK PAPER</b> — the real mock paper, in order. A side mode, no leaderboard.</p>
-        <p><span class="red">▚</span> <b>GUESS ODDS</b> — before you answer, it tells you your odds of just guessing it right. Not advice. Comedy.</p>
+        <p><span class="red">▚</span> <b>START GRIND</b> — endless practice from the mock + a bank of predicted questions. Every answer bumps your count on the <b>leaderboard</b>. Right or wrong doesn't matter — reps do. Hop in and out whenever.</p>
+        <p><span class="red">▚</span> <b>MOCK PAPER</b> — the real mock paper, in order. Side mode, no leaderboard.</p>
+        <p><span class="red">▚</span> <b>GUESS ODDS</b> — your odds of guessing a question right, with the real breakdown. Hit <b>I'LL GAMBLE</b> to auto-submit a random answer; land it and you win <b>◈ currency</b> + a global shout-out.</p>
+        <p><span class="red">▚</span> spend currency on <b>gambling titles</b> that show next to your name on the board.</p>
         <p><span class="red">▚</span> get a question wrong and it explains why. that's the actual point.</p>
-        <p class="info-small">questions reconstructed from the DDW mock + practice bank. answers graded server-side. no accounts, no passwords, just a name. good luck.</p>
+        <p class="info-small">questions reconstructed from the DDW mock + practice bank. answers graded server-side. no passwords — your name IS your account.</p>
       </div>
       <button id="btn-info-back" class="hud-btn"><span class="btn-bar"></span><span class="btn-label">BACK</span><span class="btn-arrow">◀</span></button>
     </section>
@@ -167,9 +148,38 @@
     </section>
   </main>
 
-  <!-- loader -->
-  <div id="loader" class="loader"><div class="loader-mark">▚▚</div><div id="loader-text" class="loader-text">…</div></div>
+  <!-- ── LEADERBOARD OVERLAY (openable mid-question) ─────────── -->
+  <div id="board-overlay" class="overlay">
+    <div class="overlay-card board-card">
+      <div class="overlay-head"><span class="slash">//</span><h3>LEADERBOARD</h3><span id="board-online" class="overlay-tag">— online</span><button id="board-close" class="x-btn">✕</button></div>
+      <p class="board-sub">it's practice — <span class="red">right or wrong doesn't matter.</span> only the grind counts.</p>
+      <div id="board-body" class="board-body"></div>
+    </div>
+  </div>
 
+  <!-- ── TITLES SHOP OVERLAY ─────────────────────────────────── -->
+  <div id="shop-overlay" class="overlay">
+    <div class="overlay-card shop-card">
+      <div class="overlay-head"><span class="slash">//</span><h3>TITLES</h3><span class="overlay-tag">◈ <span id="shop-balance">0</span></span><button id="shop-close" class="x-btn">✕</button></div>
+      <p class="board-sub">win gambles to earn <span class="red">◈ currency</span>. spend it on a title that rides next to your name.</p>
+      <div id="shop-grid" class="shop-grid"></div>
+    </div>
+  </div>
+
+  <!-- ── LOGIN-EXISTS POPUP ──────────────────────────────────── -->
+  <div id="login-popup" class="overlay">
+    <div class="overlay-card popup-card">
+      <div class="popup-glyph">◈</div>
+      <h3 class="popup-title">ACCOUNT EXISTS</h3>
+      <p class="popup-msg">an operative named <b id="popup-name">—</b> is already on file. continue as them?</p>
+      <div class="popup-actions">
+        <button id="popup-continue" class="hud-btn primary"><span class="btn-bar"></span><span class="btn-label">CONTINUE</span><span class="btn-arrow">▶</span></button>
+        <button id="popup-cancel" class="hud-btn ghost"><span class="btn-label">DIFFERENT NAME</span></button>
+      </div>
+    </div>
+  </div>
+
+  <div id="loader" class="loader"><div class="loader-mark">▚▚</div><div id="loader-text" class="loader-text">…</div></div>
   <script type="module" src="/js/app.js"></script>
 </body>
 </html>

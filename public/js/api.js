@@ -11,10 +11,13 @@ async function jget(url) {
 }
 
 export const API = {
-  player: (handle) => jpost('/api/player', { handle }),
+  player: (handle) => jpost('/api/player', { handle }),               // → { player, existed }
   questions: (mode) => jget(`/api/questions?mode=${encodeURIComponent(mode)}`),
-  check: (payload) => jpost('/api/check', payload),
+  check: (payload) => jpost('/api/check', payload),                    // {questionId,response,handle,mode,gambled}
   leaderboard: () => jget('/api/leaderboard'),
   live: () => jget('/api/live'),
   announcements: (since = 0) => jget(`/api/announcements?since=${since}`),
+  titles: (handle) => jget(`/api/titles?handle=${encodeURIComponent(handle)}`),
+  buyTitle: (handle, id) => jpost('/api/titles/buy', { handle, id }),
+  equipTitle: (handle, id) => jpost('/api/titles/equip', { handle, id }),
 };
